@@ -16,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/GlitchlessCode/renderwebsocket/issues"
   },
-  "homepage": "https://github.com/GlitchlessCode/renderwebsocket#readme"
+  "homepage": "https://github.com/GlitchlessCode/renderwebsocket#readme",
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
 }
