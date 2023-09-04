@@ -1,20 +1,17 @@
-const WebSocket = require("ws");
 const express = require("express");
-
 const app = express();
+const expressWs = require("express-ws")(app);
 
-const wss = new WebSocket.Server({ port: 3000 });
-wss.on("connection", (ws) => {
-  ws.on("message", (message) => {
-    console.log(`Received message => ${message}`);
+app.get("/", function (req, res, next) {
+  console.log("get route");
+  res.end();
+});
+
+app.ws("/", function (ws, req) {
+  ws.on("message", function (msg) {
+    console.log(msg);
   });
-  ws.send("Hello! Message From Server!!");
+  console.log("socket");
 });
 
-app.get("/", async (req, res) => {
-  res.status(200).send();
-});
-
-app.listen(5000, () => {
-  console.log("Running on port 5000.");
-});
+app.listen(3000);
