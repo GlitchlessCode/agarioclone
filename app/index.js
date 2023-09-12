@@ -15,3 +15,4 @@ app.ws("/", function (ws, req) {
 });
 
 app.listen(3000);
+console.log("listening");
