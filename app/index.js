@@ -1,13 +1,25 @@
 // Import Statements
 const express = require("express");
 const ws = require("ws");
+const crypto = require("crypto");
+const path = require("path");
 const app = express();
+const clients = {};
 
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
-wsServer.on("connection", (socket) => {
+wsServer.on("connection", function (ws, req) {
   console.log("socket");
-  socket.on("message", (message) => console.log(message.toString()));
+  const UUID = crypto.randomUUID();
+  ws.id = UUID;
+  clients[UUID] = ws;
+  ws.on("close", function (code, reason) {
+    delete clients[this.id];
+  });
+  ws.on("message", function (data, isBinary) {
+    console.log(isBinary ? data : data.toString());
+  });
+  console.log(Object.keys(clients));
 });
 
 // Express Server
@@ -19,7 +31,9 @@ server.on("upgrade", (request, socket, head) => {
   });
 });
 
+app.use(express.static("page"));
+
 app.get("/", (req, res) => {
   console.log("get route");
-  res.end();
+  res.sendFile(path.join(__dirname, "/index.html"));
 });
