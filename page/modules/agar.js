@@ -3,12 +3,20 @@ class Entity {
   x;
   /** @type {number} */
   y;
+  /** @type {number} */
+  radius;
   /** @type {string} */
   #uuid;
-  constructor(x, y) {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   */
+  constructor(x, y, radius) {
     this.#uuid = crypto.randomUUID();
     this.x = x;
     this.y = y;
+    this.radius = radius;
   }
 
   get uuid() {
@@ -17,20 +25,20 @@ class Entity {
 }
 
 class Player extends Entity {
-  constructor(x, y) {
-    super(x, y);
+  constructor(x, y, radius) {
+    super(x, y, radius);
   }
 }
 
 class Food extends Entity {
-  constructor(x, y) {
-    super(x, y);
+  constructor(x, y, radius) {
+    super(x, y, radius);
   }
 }
 
 class Virus extends Entity {
-  constructor(x, y) {
-    super(x, y);
+  constructor(x, y, radius) {
+    super(x, y, radius);
   }
 }
 
@@ -43,7 +51,6 @@ class World {
   #height;
 
   /**
-   *
    * @param {bigint} width
    * @param {bigint} height
    * @param  {...Entity} entities
@@ -55,7 +62,35 @@ class World {
         throw new TypeError("entities[] must be of type Entity");
     });
   }
+
+  draw() {
+    return this;
+  }
+
+  update() {}
 }
 
-export { World };
+class Camera {
+  /** @type {number} */
+  x;
+  /** @type {number} */
+  y;
+  /** @type {CanvasRenderingContext2D} */
+  ctx;
+  /** @type {HTMLCanvasElement} */
+  cnv;
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {CanvasRenderingContext2D} context
+   */
+  constructor(x, y, context) {
+    this.x = x;
+    this.y = y;
+    this.ctx = context;
+    this.cnv = context.canvas;
+  }
+}
+
+export { World, Camera };
 export default { Player, Food, Virus };
