@@ -22,6 +22,9 @@ class Entity {
   get uuid() {
     return this.#uuid;
   }
+
+  // Empty draw method
+  draw() {}
 }
 
 class Player extends Entity {
@@ -63,7 +66,7 @@ class World {
     });
   }
 
-  draw() {
+  draw(scale) {
     return this;
   }
 
@@ -79,16 +82,35 @@ class Camera {
   ctx;
   /** @type {HTMLCanvasElement} */
   cnv;
+  /** @type {World} */
+  world;
+  /** @type {number} */
+  scale;
   /**
    * @param {number} x
    * @param {number} y
    * @param {CanvasRenderingContext2D} context
+   * @param {World} world
    */
   constructor(x, y, context) {
     this.x = x;
     this.y = y;
     this.ctx = context;
     this.cnv = context.canvas;
+    this.world = world;
+  }
+  /**
+   * @param {World} world
+   */
+  changeWorld(world) {
+    if (!(world instanceof World))
+      throw new TypeError("world must be of type World");
+    this.world = world;
+  }
+
+  draw() {
+    const largestSize = Math.max(this.cnv.width, this.cnv.height);
+    const scale = (largestSize / 1000) * scale;
   }
 }
 

@@ -18,9 +18,6 @@ const mouseRatio = {
 /** @type {World} */
 let world;
 
-// Camera
-const camera = new Camera(0, 0, ctx);
-
 // * Event Listeners
 window.addEventListener("resize", setCanvasScale);
 
