@@ -45,8 +45,6 @@ loadWorld();
 function drawFrame() {
   ctx.fillStyle = "#eeeeff";
   ctx.fillRect(0, 0, cnv.width, cnv.height);
-
-  camera.camScale = 1;
   camera.draw();
   requestAnimationFrame(drawFrame);
 }
