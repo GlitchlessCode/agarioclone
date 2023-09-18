@@ -18,6 +18,9 @@ const mouseRatio = {
 /** @type {World} */
 let world;
 
+// Camera
+const camera = new Camera(0, 0, ctx);
+
 // * Event Listeners
 window.addEventListener("resize", setCanvasScale);
 
@@ -43,6 +46,8 @@ function drawFrame() {
   ctx.fillStyle = "#eeeeff";
   ctx.fillRect(0, 0, cnv.width, cnv.height);
 
+  camera.camScale = 1;
+  camera.draw();
   requestAnimationFrame(drawFrame);
 }
 

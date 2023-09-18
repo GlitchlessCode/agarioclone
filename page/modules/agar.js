@@ -85,7 +85,7 @@ class Camera {
   /** @type {World} */
   world;
   /** @type {number} */
-  scale;
+  camScale;
   /**
    * @param {number} x
    * @param {number} y
@@ -97,7 +97,7 @@ class Camera {
     this.y = y;
     this.ctx = context;
     this.cnv = context.canvas;
-    this.world = world;
+    this.camScale = 1;
   }
   /**
    * @param {World} world
@@ -110,7 +110,25 @@ class Camera {
 
   draw() {
     const largestSize = Math.max(this.cnv.width, this.cnv.height);
-    const scale = (largestSize / 1000) * scale;
+    const scale = (largestSize / 1000) * this.camScale;
+
+    for (let i = 0; i < 100; i++) {
+      for (let n = 0; n < 100; n++) {
+        let Uhex = Math.floor((i / 100) * 256)
+          .toString(16)
+          .padStart(2, "0");
+        let Vhex = Math.floor((n / 100) * 256)
+          .toString(16)
+          .padStart(2, "0");
+        this.ctx.fillStyle = "#" + Uhex + Vhex + "00";
+        this.ctx.fillRect(
+          scale * 10 * i,
+          scale * 10 * n,
+          scale * 10,
+          scale * 10
+        );
+      }
+    }
   }
 }
 
