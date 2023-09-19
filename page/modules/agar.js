@@ -1,3 +1,7 @@
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 class Entity {
   /** @type {number} */
   x;
@@ -64,6 +68,8 @@ class World {
       if (!(element instanceof Entity))
         throw new TypeError("entities[] must be of type Entity");
     });
+    this.#width = width;
+    this.#height = height;
   }
 
   draw(scale) {
@@ -71,13 +77,21 @@ class World {
   }
 
   update() {}
+
+  get width() {
+    return parseInt(this.#width);
+  }
+
+  get height() {
+    return parseInt(this.#height);
+  }
 }
 
 class Camera {
   /** @type {number} */
-  x;
+  #x;
   /** @type {number} */
-  y;
+  #y;
   /** @type {CanvasRenderingContext2D} */
   ctx;
   /** @type {HTMLCanvasElement} */
@@ -93,8 +107,8 @@ class Camera {
    * @param {World} world
    */
   constructor(x, y, context) {
-    this.x = x;
-    this.y = y;
+    this.#x = x;
+    this.#y = y;
     this.ctx = context;
     this.cnv = context.canvas;
     this.camScale = 1;
@@ -106,28 +120,83 @@ class Camera {
     if (!(world instanceof World))
       throw new TypeError("world must be of type World");
     this.world = world;
+    this.#x = world.width / 2;
+    this.#y = world.height / 2;
   }
 
   draw() {
     const largestSize = Math.max(this.cnv.width, this.cnv.height);
-    const scale = (largestSize / 1000) * this.camScale;
+    const scale = (largestSize / 100) * this.camScale;
 
-    for (let i = 0; i < 100; i++) {
-      for (let n = 0; n < 100; n++) {
-        let Uhex = Math.floor((i / 100) * 256)
-          .toString(16)
-          .padStart(2, "0");
-        let Vhex = Math.floor((n / 100) * 256)
-          .toString(16)
-          .padStart(2, "0");
-        this.ctx.fillStyle = "#" + Uhex + Vhex + "00";
-        this.ctx.fillRect(
-          scale * 10 * i,
-          scale * 10 * n,
-          scale * 10,
-          scale * 10
-        );
-      }
+    this.ctx.strokeStyle = "#bbbbbb";
+
+    if (this.world instanceof World) {
+      this.ctx.fillStyle = "#eeeeff";
+      this.ctx.fillRect(
+        this.cnv.width / 2 - this.x * scale,
+        this.cnv.height / 2 - this.y * scale,
+        this.world.width * scale,
+        this.world.height * scale
+      );
+    }
+
+    for (
+      let i = -Math.ceil(this.cnv.width / scale / 2);
+      i < this.cnv.width / scale;
+      i++
+    ) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(i * scale + this.cnv.width / 2 - this.x * scale, 0);
+      this.ctx.lineTo(
+        i * scale + this.cnv.width / 2 - this.x * scale,
+        this.cnv.height
+      );
+      this.ctx.stroke();
+    }
+    for (
+      let i = -Math.ceil(this.cnv.height / scale / 2);
+      i < this.cnv.height / scale;
+      i++
+    ) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, i * scale + this.cnv.height / 2 - this.y * scale);
+      this.ctx.lineTo(
+        this.cnv.width,
+        i * scale + this.cnv.height / 2 - this.y * scale
+      );
+      this.ctx.stroke();
+    }
+  }
+
+  get x() {
+    if (this.world instanceof World) {
+      return clamp(this.#x, 0, this.world.width);
+    } else {
+      return 0;
+    }
+  }
+
+  set x(value) {
+    if (this.world instanceof World) {
+      this.#x = clamp(value, 0, this.world.width);
+    } else {
+      this.#x = 0;
+    }
+  }
+
+  get y() {
+    if (this.world instanceof World) {
+      return clamp(this.#y, 0, this.world.height);
+    } else {
+      return 0;
+    }
+  }
+
+  set y(value) {
+    if (this.world instanceof World) {
+      this.#y = clamp(value, 0, this.world.height);
+    } else {
+      this.#y = 0;
     }
   }
 }

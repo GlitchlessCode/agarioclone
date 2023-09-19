@@ -37,15 +37,23 @@ function setCanvasScale() {
 }
 
 function loadWorld() {
-  world = new World(100n, 100n, new Entities.Player(1, 1, 20));
+  const newWorld = new World(20n, 10n, new Entities.Player(1, 1, 20));
+  camera.changeWorld(newWorld);
+  return newWorld;
 }
 
 loadWorld();
 
+let val = 0;
 function drawFrame() {
-  ctx.fillStyle = "#eeeeff";
+  val += 0.01;
+  ctx.fillStyle = "#ddddee";
   ctx.fillRect(0, 0, cnv.width, cnv.height);
+  camera.x = 10 + 8 * Math.sin(val);
+  camera.y = 5 + 4 * Math.cos(val);
   camera.draw();
+  ctx.fillStyle = "red";
+  ctx.fillRect(cnv.width / 2 - 5, cnv.height / 2 - 5, 10, 10);
   requestAnimationFrame(drawFrame);
 }
 
