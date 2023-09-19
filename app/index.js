@@ -15,7 +15,11 @@ wsServer.on("connection", function (ws, req) {
   ws.on("close", function (code, reason) {
     delete clients[this.id];
   });
-  ws.on("message", function (data, isBinary) {});
+  ws.on("message", function (data, isBinary) {
+    console.log(data.toString());
+  });
+  console.log("Connection Established!");
+  ws.send("Test");
 });
 
 // Express Server

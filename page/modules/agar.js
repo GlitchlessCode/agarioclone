@@ -27,8 +27,7 @@ class Entity {
     return this.#uuid;
   }
 
-  // Empty draw method
-  draw() {}
+  update() {}
 }
 
 class Player extends Entity {
@@ -50,7 +49,7 @@ class Virus extends Entity {
 }
 
 class World {
-  /** @type {Object} */
+  /** @type {Object.<string, Entity>} */
   #entities;
   /** @type {bigint} */
   #width;
@@ -64,16 +63,33 @@ class World {
    */
   constructor(width, height, ...entities) {
     this.#entities = {};
-    entities.forEach((element) => {
-      if (!(element instanceof Entity))
-        throw new TypeError("entities[] must be of type Entity");
-    });
+    entities.forEach(
+      /**
+       * @param {Entity} element
+       */
+      (element) => {
+        if (!(element instanceof Entity))
+          throw new TypeError("entities[] must be of type Entity");
+        else this.#entities[element.uuid] = element;
+      }
+    );
     this.#width = width;
     this.#height = height;
   }
 
-  draw(scale) {
-    return this;
+  draw() {
+    /** @type {Array.<{x:number, y:number, r:number, c:string}>}*/
+    const result = new Array();
+    for (const [key, entity] of Object.entries(this.#entities)) {
+      if (entity instanceof Entity)
+        result.push({
+          x: entity.x,
+          y: entity.y,
+          r: entity.radius,
+          c: stringToColour(entity.uuid),
+        });
+    }
+    return result;
   }
 
   update() {}
@@ -131,6 +147,7 @@ class Camera {
     this.ctx.lineWidth = scale / 30;
     this.ctx.strokeStyle = "#bbbbbb";
 
+    // Draw World Border
     if (this.world instanceof World) {
       this.ctx.fillStyle = "#eeeeff";
       this.ctx.fillRect(
@@ -141,6 +158,7 @@ class Camera {
       );
     }
 
+    // Draw Grid Lines
     for (
       let i = -Math.ceil(this.cnv.width / scale / 2);
       i < this.cnv.width / scale;
@@ -167,6 +185,20 @@ class Camera {
       );
       this.ctx.stroke();
     }
+
+    // Draw Entities
+    this.world.draw().forEach(({ x, y, r, c }) => {
+      this.ctx.fillStyle = c;
+      this.ctx.beginPath();
+      this.ctx.arc(
+        this.cnv.width / 2 - this.x * scale + x * scale,
+        this.cnv.height / 2 - this.y * scale + y * scale,
+        r * scale,
+        0,
+        Math.PI * 2
+      );
+      this.ctx.fill();
+    });
   }
 
   get x() {
@@ -204,3 +236,17 @@ class Camera {
 
 export { World, Camera };
 export default { Player, Food, Virus };
+
+// ! TEMPORARY
+const stringToColour = (str) => {
+  let hash = 0;
+  str.split("").forEach((char) => {
+    hash = char.charCodeAt(0) + ((hash << 5) - hash);
+  });
+  let colour = "#";
+  for (let i = 0; i < 3; i++) {
+    const value = (hash >> (i * 8)) & 0xff;
+    colour += value.toString(16).padStart(2, "0");
+  }
+  return colour;
+};

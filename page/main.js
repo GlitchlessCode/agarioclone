@@ -1,5 +1,22 @@
 // * Import Statements
 import Entities, { World, Camera } from "./modules/agar.js";
+//* Classes
+class Deferred {
+  /** @type {function} */
+  resolve;
+  /** @type {function} */
+  reject;
+
+  /**@type {Promise} */
+  promise;
+  constructor() {
+    this.promise = new Promise((resolve, reject) => {
+      this.reject = reject;
+      this.resolve = resolve;
+    });
+  }
+}
+
 // * Variable Initialization
 // Canvas
 /** @type {HTMLCanvasElement} */
@@ -14,12 +31,16 @@ const mouseRatio = {
   y: 0,
 };
 
-// World
-/** @type {World} */
-let world;
-
 // Camera
 const camera = new Camera(0, 0, ctx);
+
+// World
+/** @type {World} */
+let world = newWorld(
+  new Entities.Player(1, 1, 1),
+  new Entities.Player(5, 1, 1),
+  new Entities.Player(8, 4, 1)
+);
 
 // * Event Listeners
 window.addEventListener("resize", setCanvasScale);
@@ -36,27 +57,32 @@ function setCanvasScale() {
   cnv.width = Math.floor(window.innerWidth * scale);
 }
 
-function loadWorld() {
-  const newWorld = new World(20n, 10n, new Entities.Player(1, 1, 20));
+function newWorld(...entities) {
+  const newWorld = new World(30n, 50n, ...entities);
   camera.changeWorld(newWorld);
   return newWorld;
 }
 
-loadWorld();
-
-let val = 0;
 function drawFrame() {
-  val += 0.005;
   ctx.fillStyle = "#ddddee";
   ctx.fillRect(0, 0, cnv.width, cnv.height);
-  camera.x = 10 + 8 * Math.sin(val);
-  camera.y = 5 + 4 * Math.cos(val);
-  camera.camScale = 1 - (1 + Math.cos(val)) * 0.25;
-  console.log(camera.camScale);
   camera.draw();
-  ctx.fillStyle = "red";
-  ctx.fillRect(cnv.width / 2 - 5, cnv.height / 2 - 5, 10, 10);
   requestAnimationFrame(drawFrame);
 }
 
-requestAnimationFrame(drawFrame);
+window.onload = async function () {
+  let resolver = new Deferred();
+  const ws = new WebSocket(
+    `${location.protocol == "http:" ? "ws" : "wss"}://${location.host}`
+  );
+  ws.addEventListener("open", function () {
+    console.log("Connection Established!");
+    resolver.resolve();
+  });
+  ws.addEventListener("message", function (event) {
+    console.log(event.data);
+  });
+  await resolver.promise;
+  ws.send("Test");
+  requestAnimationFrame(drawFrame);
+};
