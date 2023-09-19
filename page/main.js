@@ -46,11 +46,13 @@ loadWorld();
 
 let val = 0;
 function drawFrame() {
-  val += 0.01;
+  val += 0.005;
   ctx.fillStyle = "#ddddee";
   ctx.fillRect(0, 0, cnv.width, cnv.height);
   camera.x = 10 + 8 * Math.sin(val);
   camera.y = 5 + 4 * Math.cos(val);
+  camera.camScale = 1 - (1 + Math.cos(val)) * 0.25;
+  console.log(camera.camScale);
   camera.draw();
   ctx.fillStyle = "red";
   ctx.fillRect(cnv.width / 2 - 5, cnv.height / 2 - 5, 10, 10);

@@ -128,6 +128,7 @@ class Camera {
     const largestSize = Math.max(this.cnv.width, this.cnv.height);
     const scale = (largestSize / 100) * this.camScale;
 
+    this.ctx.lineWidth = scale / 30;
     this.ctx.strokeStyle = "#bbbbbb";
 
     if (this.world instanceof World) {
