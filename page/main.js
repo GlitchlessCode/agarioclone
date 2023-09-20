@@ -83,6 +83,6 @@ window.onload = async function () {
     console.log(event.data);
   });
   await resolver.promise;
-  ws.send("Test");
+  // ws.send("Test");
   requestAnimationFrame(drawFrame);
 };
