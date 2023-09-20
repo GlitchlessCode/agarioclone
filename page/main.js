@@ -70,6 +70,20 @@ function drawFrame() {
   requestAnimationFrame(drawFrame);
 }
 
+/**
+ * @param {{data:Blob}} param0
+ */
+async function parseMessage({ data }) {
+  if (!(data instanceof Blob)) throw new Error("data is not of type Blob");
+  const dataView = new Uint8Array(await data.arrayBuffer());
+  switch (dataView[0]) {
+    case 0:
+      console.log("init");
+      this.send(new ArrayBuffer(1));
+  }
+}
+
+// When window is loaded
 window.onload = async function () {
   let resolver = new Deferred();
   const ws = new WebSocket(
@@ -79,10 +93,7 @@ window.onload = async function () {
     console.log("Connection Established!");
     resolver.resolve();
   });
-  ws.addEventListener("message", function (event) {
-    console.log(event.data);
-  });
+  ws.addEventListener("message", parseMessage.bind(ws));
   await resolver.promise;
-  // ws.send("Test");
   requestAnimationFrame(drawFrame);
 };
