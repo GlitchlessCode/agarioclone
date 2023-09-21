@@ -15,9 +15,10 @@ class Entity {
    * @param {number} x
    * @param {number} y
    * @param {number} radius
+   * @param {string} uuid
    */
-  constructor(x, y, radius) {
-    this.#uuid = crypto.randomUUID();
+  constructor(x, y, radius, uuid) {
+    this.#uuid = uuid;
     this.x = x;
     this.y = y;
     this.radius = radius;
@@ -31,20 +32,20 @@ class Entity {
 }
 
 class Player extends Entity {
-  constructor(x, y, radius) {
-    super(x, y, radius);
+  constructor(...args) {
+    super(...args);
   }
 }
 
 class Food extends Entity {
-  constructor(x, y, radius) {
-    super(x, y, radius);
+  constructor(...args) {
+    super(...args);
   }
 }
 
 class Virus extends Entity {
-  constructor(x, y, radius) {
-    super(x, y, radius);
+  constructor(...args) {
+    super(...args);
   }
 }
 
@@ -59,10 +60,17 @@ class World {
   /**
    * @param {bigint} width
    * @param {bigint} height
+   */
+  constructor(width, height) {
+    this.#entities = {};
+    this.#width = width;
+    this.#height = height;
+  }
+
+  /**
    * @param  {...Entity} entities
    */
-  constructor(width, height, ...entities) {
-    this.#entities = {};
+  addEntities(...entities) {
     entities.forEach(
       /**
        * @param {Entity} element
@@ -73,8 +81,6 @@ class World {
         else this.#entities[element.uuid] = element;
       }
     );
-    this.#width = width;
-    this.#height = height;
   }
 
   draw() {
@@ -120,7 +126,6 @@ class Camera {
    * @param {number} x
    * @param {number} y
    * @param {CanvasRenderingContext2D} context
-   * @param {World} world
    */
   constructor(x, y, context) {
     this.#x = x;
@@ -186,19 +191,21 @@ class Camera {
       this.ctx.stroke();
     }
 
-    // Draw Entities
-    this.world.draw().forEach(({ x, y, r, c }) => {
-      this.ctx.fillStyle = c;
-      this.ctx.beginPath();
-      this.ctx.arc(
-        this.cnv.width / 2 - this.x * scale + x * scale,
-        this.cnv.height / 2 - this.y * scale + y * scale,
-        r * scale,
-        0,
-        Math.PI * 2
-      );
-      this.ctx.fill();
-    });
+    if (this.world instanceof World) {
+      // Draw Entities
+      this.world.draw().forEach(({ x, y, r, c }) => {
+        this.ctx.fillStyle = c;
+        this.ctx.beginPath();
+        this.ctx.arc(
+          this.cnv.width / 2 - this.x * scale + x * scale,
+          this.cnv.height / 2 - this.y * scale + y * scale,
+          r * scale,
+          0,
+          Math.PI * 2
+        );
+        this.ctx.fill();
+      });
+    }
   }
 
   get x() {

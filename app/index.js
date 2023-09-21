@@ -3,8 +3,12 @@ const express = require("express");
 const ws = require("ws");
 const crypto = require("crypto");
 const path = require("path");
+const { World, Entity, Entities } = require("./agarServer");
+
 const app = express();
 const clients = {};
+
+const world = new World(10000n, 1000n, new Entities.Player(1, 2, 3));
 
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
@@ -47,7 +51,8 @@ async function parseMessage(data, isBinary) {
   switch (new Uint8Array(data)[0]) {
     case 0:
       console.log("init");
-      this.send(await createMessage(2));
+      const entityCount = await fetchWorld.bind(this)();
+      this.send(await createMessage(2, entityCount));
       break;
     case 1:
       console.log("next");
@@ -61,9 +66,30 @@ async function parseMessage(data, isBinary) {
  * @param {number} status
  * @param  {...ArrayBuffer} [data]
  */
-async function createMessage(status, ...data) {
-  return await new Blob([
-    new Uint8Array(1).fill(status),
-    ...data,
-  ]).arrayBuffer();
+function createMessage(status, ...data) {
+  return new Blob([new Uint8Array([status]), ...data]).arrayBuffer();
+}
+
+/**
+ * @this WebSocket
+ */
+async function fetchWorld() {
+  const widthBuffer = new ArrayBuffer(8);
+  const heightBuffer = new ArrayBuffer(8);
+  this.queue.push(
+    await createMessage(
+      3,
+      (new DataView(widthBuffer).setBigInt64(0, world.width), widthBuffer),
+      (new DataView(heightBuffer).setBigInt64(0, world.height), heightBuffer)
+    )
+  );
+  let count = 1;
+  for (const [key, entity] of Object.entries(world.entities)) {
+    count++;
+    // this.queue.push(await createMessage(4));
+  }
+  this.queue.push(await createMessage(5));
+  const countBuff = new DataView(new ArrayBuffer(4));
+  countBuff.setInt32(0, count);
+  return countBuff;
 }

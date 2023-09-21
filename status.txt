@@ -1,8 +1,8 @@
 0: Initialization []
 1: Next []
-2: Creating World (+next) [numItems]
-3: World (+next) [width, height]
-4: World Element (+next) [type, posx, posy, ]
+2: Creating World (+next) [numItems (4)]
+3: World (+next) [width(8), height(8)]
+4: World Element (+next) [type {0: Player, 1: Virus, 2: Food} (1), posx(8), posy(8), uuid(32)]
 5: World Finished (end)
 
 255: Error on Sender

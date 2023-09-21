@@ -36,11 +36,7 @@ const camera = new Camera(0, 0, ctx);
 
 // World
 /** @type {World} */
-let world = newWorld(
-  new Entities.Player(1, 1, 1),
-  new Entities.Player(5, 1, 1),
-  new Entities.Player(8, 4, 1)
-);
+let world;
 
 // * Event Listeners
 window.addEventListener("resize", setCanvasScale);
@@ -57,8 +53,8 @@ function setCanvasScale() {
   cnv.width = Math.floor(window.innerWidth * scale);
 }
 
-function newWorld(...entities) {
-  const newWorld = new World(30n, 50n, ...entities);
+function newWorld(width, height) {
+  const newWorld = new World(width, height);
   camera.changeWorld(newWorld);
   return newWorld;
 }
@@ -94,7 +90,16 @@ async function parseMessage({ data }) {
       break;
     case 2:
       console.log("worldStart");
+      console.log(dataView.getInt32(0));
       this.send(await createMessage(1));
+      break;
+    case 3:
+      console.log("incomingWorld");
+      console.log(new Uint8Array(dataView.buffer));
+      this.send(await createMessage(1));
+      break;
+    case 5:
+      console.log("worldFinished");
       break;
     case 255:
       throw new Error("server error");
