@@ -8,7 +8,7 @@ const clients = {};
 
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
-wsServer.on("connection", function (ws, req) {
+wsServer.on("connection", async function (ws, req) {
   const UUID = crypto.randomUUID();
   ws.id = UUID;
   ws.queue = [];
@@ -18,7 +18,7 @@ wsServer.on("connection", function (ws, req) {
   });
   ws.on("message", parseMessage);
   console.log("Connection Established!");
-  ws.send(new ArrayBuffer(1));
+  ws.send(await createMessage(0));
 });
 
 // Express Server
@@ -35,12 +35,35 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "/index.html"));
 });
 
-// Functions
-function parseMessage(data, isBinary) {
+// * Functions
+/**
+ * @this WebSocket
+ * @param {Buffer} data
+ * @param {boolean} isBinary
+ */
+async function parseMessage(data, isBinary) {
   if (!isBinary) throw new Error("data is not binary");
-  switch (data[0]) {
+  const dataView = new DataView(new Uint8Array(data).buffer);
+  switch (new Uint8Array(data)[0]) {
     case 0:
       console.log("init");
-      this.send(new Uint8Array(new ArrayBuffer(1)).fill(2));
+      this.send(await createMessage(2));
+      break;
+    case 1:
+      console.log("next");
+      if (this.queue.length == 0) this.send(await createMessage(255));
+      else this.send(this.queue.shift());
+      break;
   }
+}
+
+/**
+ * @param {number} status
+ * @param  {...ArrayBuffer} [data]
+ */
+async function createMessage(status, ...data) {
+  return await new Blob([
+    new Uint8Array(1).fill(status),
+    ...data,
+  ]).arrayBuffer();
 }

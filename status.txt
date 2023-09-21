@@ -1,6 +1,6 @@
 0: Initialization []
 1: Next []
-2: Creating World (+next) []
+2: Creating World (+next) [numItems]
 3: World (+next) [width, height]
 4: World Element (+next) [type, posx, posy, ]
 5: World Finished (end)

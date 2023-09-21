@@ -71,15 +71,33 @@ function drawFrame() {
 }
 
 /**
+ * @param {number} status
+ * @param  {...ArrayBuffer} [data]
+ */
+async function createMessage(status, ...data) {
+  return await new Blob([
+    new Uint8Array(1).fill(status),
+    ...data,
+  ]).arrayBuffer();
+}
+
+/**
  * @param {{data:Blob}} param0
  */
 async function parseMessage({ data }) {
   if (!(data instanceof Blob)) throw new Error("data is not of type Blob");
-  const dataView = new Uint8Array(await data.arrayBuffer());
-  switch (dataView[0]) {
+  const dataView = new DataView((await data.arrayBuffer()).slice(1));
+  switch (new Uint8Array(await data.arrayBuffer())[0]) {
     case 0:
       console.log("init");
-      this.send(new ArrayBuffer(1));
+      this.send(await createMessage(0));
+      break;
+    case 2:
+      console.log("worldStart");
+      this.send(await createMessage(1));
+      break;
+    case 255:
+      throw new Error("server error");
   }
 }
 
@@ -94,6 +112,9 @@ window.onload = async function () {
     resolver.resolve();
   });
   ws.addEventListener("message", parseMessage.bind(ws));
+  ws.addEventListener("close", function () {
+    console.log("Connection Closed!");
+  });
   await resolver.promise;
   requestAnimationFrame(drawFrame);
 };
