@@ -55,6 +55,12 @@ class User extends Entity {
 class World {
   /** @type {Object.<string, Entity>} */
   entities;
+  /** @type {Object.<string, Entity>} */
+  players;
+  /** @type {Object.<string, Entity>} */
+  viruses;
+  /** @type {Object.<string, Entity>} */
+  food;
   /** @type {bigint} */
   #width;
   /** @type {bigint} */
@@ -67,6 +73,9 @@ class World {
    */
   constructor(width, height, ...entities) {
     this.entities = {};
+    this.players = {};
+    this.viruses = {};
+    this.food = {};
     entities.forEach(
       /**
        * @param {Entity} element
@@ -74,7 +83,14 @@ class World {
       (element) => {
         if (!(element instanceof Entity))
           throw new TypeError("entities[] must be of type Entity");
-        else this.entities[element.uuid.UUID] = element;
+        else {
+          this.entities[element.uuid.UUID] = element;
+          if (element instanceof Player)
+            this.players[element.uuid.UUID] = element;
+          if (element instanceof Virus)
+            this.viruses[element.uuid.UUID] = element;
+          if (element instanceof Food) this.food[element.uuid.UUID] = element;
+        }
       }
     );
     this.#width = width;
@@ -98,7 +114,7 @@ class World {
  */
 function uuid() {
   function getRandomSymbol(symbol) {
-    var array;
+    let array;
 
     if (symbol === "y") {
       array = ["8", "9", "a", "b"];

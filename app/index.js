@@ -8,7 +8,7 @@ const { World, Entity, Entities } = require("./agarServer");
 const app = express();
 const clients = {};
 
-const world = new World(10000n, 1000n, new Entities.Player(1, 2, 3));
+const world = new World(100n, 60n, new Entities.Player(10, 20, 2));
 
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
@@ -19,6 +19,7 @@ wsServer.on("connection", async function (ws, req) {
   clients[UUID] = ws;
   ws.on("close", function (code, reason) {
     delete clients[this.id];
+    console.log("Connection Closed!");
   });
   ws.on("message", parseMessage);
   console.log("Connection Established!");
@@ -84,9 +85,20 @@ async function fetchWorld() {
     )
   );
   let count = 1;
-  for (const [key, entity] of Object.entries(world.entities)) {
+  for (const [uuid, entity] of Object.entries(world.entities)) {
     count++;
-    // this.queue.push(await createMessage(4));
+    const infoView = new DataView(new ArrayBuffer(20));
+    this.queue.push(
+      await createMessage(
+        4,
+        new Uint8Array([0]),
+        (infoView.setFloat64(0, entity.x),
+        infoView.setFloat64(8, entity.y),
+        infoView.setFloat32(16, entity.radius),
+        infoView.buffer),
+        entity.uuid.buff
+      )
+    );
   }
   this.queue.push(await createMessage(5));
   const countBuff = new DataView(new ArrayBuffer(4));

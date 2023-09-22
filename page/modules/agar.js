@@ -32,20 +32,38 @@ class Entity {
 }
 
 class Player extends Entity {
-  constructor(...args) {
-    super(...args);
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   * @param {string} uuid
+   */
+  constructor(x, y, radius, uuid) {
+    super(x, y, radius, uuid);
   }
 }
 
 class Food extends Entity {
-  constructor(...args) {
-    super(...args);
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   * @param {string} uuid
+   */
+  constructor(x, y, radius, uuid) {
+    super(x, y, radius, uuid);
   }
 }
 
 class Virus extends Entity {
-  constructor(...args) {
-    super(...args);
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   * @param {string} uuid
+   */
+  constructor(x, y, radius, uuid) {
+    super(x, y, radius, uuid);
   }
 }
 
@@ -170,9 +188,12 @@ class Camera {
       i++
     ) {
       this.ctx.beginPath();
-      this.ctx.moveTo(i * scale + this.cnv.width / 2 - this.x * scale, 0);
+      this.ctx.moveTo(
+        i * scale + this.cnv.width / 2 - ((this.x * scale) % scale),
+        0
+      );
       this.ctx.lineTo(
-        i * scale + this.cnv.width / 2 - this.x * scale,
+        i * scale + this.cnv.width / 2 - ((this.x * scale) % scale),
         this.cnv.height
       );
       this.ctx.stroke();
@@ -183,10 +204,13 @@ class Camera {
       i++
     ) {
       this.ctx.beginPath();
-      this.ctx.moveTo(0, i * scale + this.cnv.height / 2 - this.y * scale);
+      this.ctx.moveTo(
+        0,
+        i * scale + this.cnv.height / 2 - ((this.y * scale) % scale)
+      );
       this.ctx.lineTo(
         this.cnv.width,
-        i * scale + this.cnv.height / 2 - this.y * scale
+        i * scale + this.cnv.height / 2 - ((this.y * scale) % scale)
       );
       this.ctx.stroke();
     }

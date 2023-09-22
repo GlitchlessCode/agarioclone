@@ -53,17 +53,25 @@ function setCanvasScale() {
   cnv.width = Math.floor(window.innerWidth * scale);
 }
 
-function newWorld(width, height) {
-  const newWorld = new World(width, height);
-  camera.changeWorld(newWorld);
-  return newWorld;
-}
-
 function drawFrame() {
   ctx.fillStyle = "#ddddee";
   ctx.fillRect(0, 0, cnv.width, cnv.height);
   camera.draw();
   requestAnimationFrame(drawFrame);
+}
+
+/**
+ * @param {ArrayBuffer} buff
+ * @returns {string}
+ */
+function uuid(buff) {
+  function getSymbol(_, index) {
+    return (
+      ([8, 12, 16, 20].includes(index) ? "-" : "") +
+      new Uint8Array(buff)[index].toString(16)
+    );
+  }
+  return "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx".replace(/x/g, getSymbol);
 }
 
 /**
@@ -78,6 +86,7 @@ async function createMessage(status, ...data) {
 }
 
 /**
+ * @this {WebSocket}
  * @param {{data:Blob}} param0
  */
 async function parseMessage({ data }) {
@@ -90,16 +99,38 @@ async function parseMessage({ data }) {
       break;
     case 2:
       console.log("worldStart");
-      console.log(dataView.getInt32(0));
       this.send(await createMessage(1));
       break;
     case 3:
       console.log("incomingWorld");
-      console.log(new Uint8Array(dataView.buffer));
+      world = new World(dataView.getBigInt64(0), dataView.getBigInt64(8));
+      this.send(await createMessage(1));
+      break;
+    case 4:
+      console.log("incomingEntity");
+      switch (dataView.getUint8(0)) {
+        case 0:
+          world.addEntities(
+            new Entities.Player(
+              dataView.getFloat64(1),
+              dataView.getFloat64(9),
+              dataView.getFloat32(17),
+              uuid(dataView.buffer.slice(-32))
+            )
+          );
+          break;
+        case 1:
+          break;
+        case 2:
+          break;
+        default:
+          throw new Error("invalid entity configuration recieved");
+      }
       this.send(await createMessage(1));
       break;
     case 5:
       console.log("worldFinished");
+      camera.changeWorld(world);
       break;
     case 255:
       throw new Error("server error");
