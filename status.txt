@@ -1,11 +1,13 @@
 0: Initialization []
 1: Next []
-2: Creating World (+next) [numItems (4)]
+2: Creating World (+next) []
 3: World (+next) [width(8), height(8)]
-4: World Element (+next) [type {0: Player, 1: Virus, 2: Food} (1), posx(8), posy(8), radius(4), uuid(32)]
-5: World Finished (end)
-6: Update Element 
+4: User (+next) [posx(8), posy(8)]
+5: World Element (+next) [type {0: Player, 1: Virus, 2: Food, 3: Mass} (1), posx(8), posy(8), radius(4), uuid(32)]
+6: World Finished (end)
+7: Tick Start (+next) []
+8: Update Element (+next) []
+9: Tick Finished (end)
 
-255: Error on Sender
 
-Use DataView for transfer
+255: Error on Sender []

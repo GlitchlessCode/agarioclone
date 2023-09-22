@@ -67,6 +67,18 @@ class Virus extends Entity {
   }
 }
 
+class Mass extends Entity {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   * @param {string} uuid
+   */
+  constructor(x, y, radius, uuid) {
+    super(x, y, radius, uuid);
+  }
+}
+
 class World {
   /** @type {Object.<string, Entity>} */
   #entities;
@@ -159,8 +171,6 @@ class Camera {
     if (!(world instanceof World))
       throw new TypeError("world must be of type World");
     this.world = world;
-    this.#x = world.width / 2;
-    this.#y = world.height / 2;
   }
 
   draw() {
@@ -241,11 +251,7 @@ class Camera {
   }
 
   set x(value) {
-    if (this.world instanceof World) {
-      this.#x = clamp(value, 0, this.world.width);
-    } else {
-      this.#x = 0;
-    }
+    this.#x = value;
   }
 
   get y() {
@@ -257,16 +263,12 @@ class Camera {
   }
 
   set y(value) {
-    if (this.world instanceof World) {
-      this.#y = clamp(value, 0, this.world.height);
-    } else {
-      this.#y = 0;
-    }
+    this.#y = value;
   }
 }
 
 export { World, Camera };
-export default { Player, Food, Virus };
+export default { Player, Food, Virus, Mass };
 
 // ! TEMPORARY
 const stringToColour = (str) => {

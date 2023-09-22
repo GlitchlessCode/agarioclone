@@ -107,28 +107,35 @@ async function parseMessage({ data }) {
       this.send(await createMessage(1));
       break;
     case 4:
+      console.log("incomingCamera");
+      camera.x = dataView.getFloat64(0);
+      camera.y = dataView.getFloat64(8);
+      this.send(await createMessage(1));
+      break;
+    case 5:
       console.log("incomingEntity");
+      let params = [
+        dataView.getFloat64(1),
+        dataView.getFloat64(9),
+        dataView.getFloat32(17),
+        uuid(dataView.buffer.slice(-32)),
+      ];
       switch (dataView.getUint8(0)) {
         case 0:
-          world.addEntities(
-            new Entities.Player(
-              dataView.getFloat64(1),
-              dataView.getFloat64(9),
-              dataView.getFloat32(17),
-              uuid(dataView.buffer.slice(-32))
-            )
-          );
+          world.addEntities(new Entities.Player(...params));
           break;
         case 1:
+          world.addEntities(new Entities.Virus(...params));
           break;
         case 2:
+          world.addEntities(new Entities.Food(...params));
           break;
         default:
           throw new Error("invalid entity configuration recieved");
       }
       this.send(await createMessage(1));
       break;
-    case 5:
+    case 6:
       console.log("worldFinished");
       camera.changeWorld(world);
       break;

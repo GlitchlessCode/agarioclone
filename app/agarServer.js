@@ -5,20 +5,18 @@ class Entity {
   x;
   /** @type {number} */
   y;
-  /** @type {number} */
-  radius;
   /** @type {{UUID: string, buff: ArrayBuffer}} */
   #uuid;
   /**
    * @param {number} x
    * @param {number} y
    * @param {number} radius
+   * @param {string} [UUID]
    */
-  constructor(x, y, radius) {
-    this.#uuid = uuid();
+  constructor(x, y, UUID) {
+    this.#uuid = UUID ? UUID : uuid();
     this.x = x;
     this.y = y;
-    this.radius = radius;
   }
 
   get uuid() {
@@ -28,27 +26,74 @@ class Entity {
   update() {}
 }
 
-class Player extends Entity {
-  constructor(...args) {
-    super(...args);
+class Circle extends Entity {
+  /** @type {number} */
+  radius;
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   * @param {string} [UUID]
+   */
+  constructor(x, y, radius, UUID) {
+    super(x, y, UUID);
+    this.radius = radius;
   }
 }
 
-class Food extends Entity {
-  constructor(...args) {
-    super(...args);
+class Player extends Circle {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   */
+  constructor(x, y, radius) {
+    super(x, y, radius);
   }
 }
 
-class Virus extends Entity {
-  constructor(...args) {
-    super(...args);
+class Food extends Circle {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   */
+  constructor(x, y, radius) {
+    super(x, y, radius);
+  }
+}
+
+class Virus extends Circle {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   */
+  constructor(x, y, radius) {
+    super(x, y, radius);
+  }
+}
+
+class Mass extends Circle {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   */
+  constructor(x, y, radius) {
+    super(x, y, radius);
   }
 }
 
 class User extends Entity {
-  constructor(...args) {
-    super(...args);
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   * @param {string} [UUID]
+   */
+  constructor(x, y, UUID) {
+    super(x, y, UUID);
   }
 }
 
@@ -61,6 +106,10 @@ class World {
   viruses;
   /** @type {Object.<string, Entity>} */
   food;
+  /** @type {Object.<string, Entity>} */
+  mass;
+  /** @type {Object.<string, Entity>} */
+  users;
   /** @type {bigint} */
   #width;
   /** @type {bigint} */
@@ -76,6 +125,17 @@ class World {
     this.players = {};
     this.viruses = {};
     this.food = {};
+    this.mass = {};
+    this.users = {};
+    this.addEntities(...entities);
+    this.#width = width;
+    this.#height = height;
+  }
+
+  /**
+   * @param  {...Entity} entities
+   */
+  addEntities(...entities) {
     entities.forEach(
       /**
        * @param {Entity} element
@@ -84,27 +144,29 @@ class World {
         if (!(element instanceof Entity))
           throw new TypeError("entities[] must be of type Entity");
         else {
-          this.entities[element.uuid.UUID] = element;
-          if (element instanceof Player)
-            this.players[element.uuid.UUID] = element;
-          if (element instanceof Virus)
-            this.viruses[element.uuid.UUID] = element;
-          if (element instanceof Food) this.food[element.uuid.UUID] = element;
+          if (element instanceof User) this.users[element.uuid.UUID] = element;
+          else {
+            this.entities[element.uuid.UUID] = element;
+            if (element instanceof Player)
+              this.players[element.uuid.UUID] = element;
+            if (element instanceof Virus)
+              this.viruses[element.uuid.UUID] = element;
+            if (element instanceof Food) this.food[element.uuid.UUID] = element;
+            if (element instanceof Mass) this.mass[element.uuid.UUID] = element;
+          }
         }
       }
     );
-    this.#width = width;
-    this.#height = height;
   }
 
   update() {}
 
   get width() {
-    return this.#width;
+    return parseInt(this.#width);
   }
 
   get height() {
-    return this.#height;
+    return parseInt(this.#height);
   }
 }
 
@@ -138,10 +200,12 @@ function uuid() {
 
 module.exports = {
   World,
+  uuid,
   Entities: {
     Player,
     Virus,
     Food,
+    Mass,
     User,
   },
 };
