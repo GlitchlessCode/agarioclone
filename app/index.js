@@ -59,7 +59,11 @@ app.get("/", (req, res) => {
  * @param {boolean} isBinary
  */
 async function parseMessage(data, isBinary) {
-  if (!isBinary) throw new Error("data is not binary");
+  if (!isBinary) {
+    console.log(data);
+    throw new Error("data is not binary");
+  }
+
   const dataView = new DataView(new Uint8Array(data).buffer);
   switch (new Uint8Array(data)[0]) {
     case 0:
