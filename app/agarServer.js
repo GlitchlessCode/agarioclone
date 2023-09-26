@@ -1,6 +1,18 @@
 const crypto = require("crypto");
 
+/**
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ * @returns {number}
+ */
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 class Entity {
+  /** @type {boolean} */
+  different;
   /** @type {number} */
   x;
   /** @type {number} */
@@ -17,6 +29,7 @@ class Entity {
     this.#uuid = UUID ? UUID : uuid();
     this.x = x;
     this.y = y;
+    this.different = true;
   }
 
   get uuid() {
@@ -86,6 +99,8 @@ class Mass extends Circle {
 }
 
 class User extends Entity {
+  /** @type {{x: number, y:number}} */
+  mouse;
   /**
    * @param {number} x
    * @param {number} y
@@ -94,21 +109,22 @@ class User extends Entity {
    */
   constructor(x, y, UUID) {
     super(x, y, UUID);
+    this.mouse = { x: 0, y: 0 };
   }
 }
 
 class World {
   /** @type {Object.<string, Entity>} */
   entities;
-  /** @type {Object.<string, Entity>} */
+  /** @type {Object.<string, Player>} */
   players;
-  /** @type {Object.<string, Entity>} */
+  /** @type {Object.<string, Virus>} */
   viruses;
-  /** @type {Object.<string, Entity>} */
+  /** @type {Object.<string, Food>} */
   food;
-  /** @type {Object.<string, Entity>} */
+  /** @type {Object.<string, Mass>} */
   mass;
-  /** @type {Object.<string, Entity>} */
+  /** @type {Object.<string, User>} */
   users;
   /** @type {bigint} */
   #width;
@@ -159,7 +175,14 @@ class World {
     );
   }
 
-  update() {}
+  update() {
+    for (const [uuid, user] of Object.entries(this.users)) {
+      user.x += clamp(user.mouse.x, -0.5, 0.5) / 1.6;
+      user.y += clamp(user.mouse.y, -0.5, 0.5) / 1.6;
+      user.x = clamp(user.x, 0, this.width);
+      user.y = clamp(user.y, 0, this.height);
+    }
+  }
 
   get width() {
     return parseInt(this.#width);
@@ -201,6 +224,7 @@ function uuid() {
 module.exports = {
   World,
   uuid,
+  clamp,
   Entities: {
     Player,
     Virus,

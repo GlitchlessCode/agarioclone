@@ -1,3 +1,5 @@
+import { hash } from "./sha256.js";
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -128,7 +130,12 @@ class World {
     return result;
   }
 
-  update() {}
+  update() {
+    for (const [uuid, entity] of Object.entries(this.#entities)) {
+      entity.x = Math.sin(Date.now());
+    }
+    console.log(hash(JSON.stringify(this.#entities)));
+  }
 
   get width() {
     return parseInt(this.#width);
@@ -240,6 +247,17 @@ class Camera {
         this.ctx.fill();
       });
     }
+
+    this.ctx.fillStyle = "red";
+    this.ctx.beginPath();
+    this.ctx.arc(
+      this.cnv.width / 2,
+      this.cnv.height / 2,
+      scale / 2,
+      0,
+      Math.PI * 2
+    );
+    this.ctx.fill();
   }
 
   get x() {
