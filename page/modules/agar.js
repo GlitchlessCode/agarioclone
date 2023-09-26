@@ -13,14 +13,17 @@ class Entity {
   radius;
   /** @type {string} */
   #uuid;
+  /** @type {string} */
+  #colour;
   /**
    * @param {number} x
    * @param {number} y
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, uuid) {
+  constructor(x, y, radius, colour, uuid) {
     this.#uuid = uuid;
+    this.#colour = colour;
     this.x = x;
     this.y = y;
     this.radius = radius;
@@ -28,6 +31,10 @@ class Entity {
 
   get uuid() {
     return this.#uuid;
+  }
+
+  get colour() {
+    return this.#colour;
   }
 
   update() {}
@@ -40,8 +47,8 @@ class Player extends Entity {
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, uuid) {
-    super(x, y, radius, uuid);
+  constructor(x, y, radius, colour, uuid) {
+    super(x, y, radius, colour, uuid);
   }
 }
 
@@ -52,8 +59,8 @@ class Food extends Entity {
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, uuid) {
-    super(x, y, radius, uuid);
+  constructor(x, y, radius, colour, uuid) {
+    super(x, y, radius, colour, uuid);
   }
 }
 
@@ -64,8 +71,8 @@ class Virus extends Entity {
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, uuid) {
-    super(x, y, radius, uuid);
+  constructor(x, y, radius, colour, uuid) {
+    super(x, y, radius, colour, uuid);
   }
 }
 
@@ -76,8 +83,8 @@ class Mass extends Entity {
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, uuid) {
-    super(x, y, radius, uuid);
+  constructor(x, y, radius, colour, uuid) {
+    super(x, y, radius, colour, uuid);
   }
 }
 
@@ -124,7 +131,7 @@ class World {
           x: entity.x,
           y: entity.y,
           r: entity.radius,
-          c: stringToColour(entity.uuid),
+          c: entity.colour,
         });
     }
     return result;
@@ -287,17 +294,3 @@ class Camera {
 
 export { World, Camera };
 export default { Player, Food, Virus, Mass };
-
-// ! TEMPORARY
-const stringToColour = (str) => {
-  let hash = 0;
-  str.split("").forEach((char) => {
-    hash = char.charCodeAt(0) + ((hash << 5) - hash);
-  });
-  let colour = "#";
-  for (let i = 0; i < 3; i++) {
-    const value = (hash >> (i * 8)) & 0xff;
-    colour += value.toString(16).padStart(2, "0");
-  }
-  return colour;
-};

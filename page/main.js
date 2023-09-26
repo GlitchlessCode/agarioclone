@@ -111,6 +111,9 @@ async function parseMessage({ data }) {
         dataView.getFloat64(12),
         9
       );
+      for (let i = 0; i < dataView.getUint32(0); i++) {
+        // const entityView = new DataView(dataView.buffer.slice(20 + i*, ))
+      }
       break;
     case 0:
       console.log("init");
@@ -137,6 +140,11 @@ async function parseMessage({ data }) {
         dataView.getFloat64(1),
         dataView.getFloat64(9),
         dataView.getFloat32(17),
+        colour(
+          dataView.getUint8(21),
+          dataView.getUint8(22),
+          dataView.getUint8(23)
+        ),
         uuid(dataView.buffer.slice(-32)),
       ];
       switch (dataView.getUint8(0)) {
@@ -235,4 +243,17 @@ async function mouseTick(mouseX, mouseY) {
   }
   if (this.readyState == 1)
     setTimeout(mouseTick.bind(this), 100, mouseRatio.x, mouseRatio.y);
+}
+
+/**
+ *
+ * @param {...number} values
+ * @returns {string}
+ */
+function colour(...values) {
+  let result = "#";
+  result += values[0].toString(16).padStart(2, 0);
+  result += values[1].toString(16).padStart(2, 0);
+  result += values[2].toString(16).padStart(2, 0);
+  return result;
 }

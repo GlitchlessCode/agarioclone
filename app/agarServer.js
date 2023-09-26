@@ -10,6 +10,23 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+/**
+ * @param {string} str
+ * @returns {string}
+ */
+function stringToColour(str) {
+  let hash = 0;
+  str.split("").forEach((char) => {
+    hash = char.charCodeAt(0) + ((hash << 5) - hash);
+  });
+  let colour = "#";
+  for (let i = 0; i < 3; i++) {
+    const value = (hash >> (i * 8)) & 0xff;
+    colour += value.toString(16).padStart(2, "0");
+  }
+  return colour;
+}
+
 class Entity {
   /** @type {boolean} */
   different;
@@ -42,15 +59,22 @@ class Entity {
 class Circle extends Entity {
   /** @type {number} */
   radius;
+  /** @type {string} */
+  #colour;
   /**
    * @param {number} x
    * @param {number} y
    * @param {number} radius
-   * @param {string} [UUID]
+   * @param {string} colour
    */
-  constructor(x, y, radius, UUID) {
-    super(x, y, UUID);
+  constructor(x, y, radius, colour) {
+    super(x, y);
     this.radius = radius;
+    this.#colour = colour;
+  }
+
+  get colour() {
+    return this.#colour;
   }
 }
 
@@ -59,9 +83,10 @@ class Player extends Circle {
    * @param {number} x
    * @param {number} y
    * @param {number} radius
+   * @param {string} colour
    */
-  constructor(x, y, radius) {
-    super(x, y, radius);
+  constructor(x, y, radius, colour) {
+    super(x, y, radius, colour);
   }
 }
 
@@ -72,7 +97,7 @@ class Food extends Circle {
    * @param {number} radius
    */
   constructor(x, y, radius) {
-    super(x, y, radius);
+    super(x, y, radius, stringToColour((Math.random() * 10).toString()));
   }
 }
 
@@ -83,7 +108,7 @@ class Virus extends Circle {
    * @param {number} radius
    */
   constructor(x, y, radius) {
-    super(x, y, radius);
+    super(x, y, radius, "#77ff77");
   }
 }
 
@@ -93,8 +118,8 @@ class Mass extends Circle {
    * @param {number} y
    * @param {number} radius
    */
-  constructor(x, y, radius) {
-    super(x, y, radius);
+  constructor(x, y, radius, colour) {
+    super(x, y, radius, colour);
   }
 }
 
@@ -114,7 +139,7 @@ class User extends Entity {
 }
 
 class World {
-  /** @type {Object.<string, Entity>} */
+  /** @type {Object.<string, Circle>} */
   entities;
   /** @type {Object.<string, Player>} */
   players;
@@ -134,7 +159,7 @@ class World {
   /**
    * @param {bigint} width
    * @param {bigint} height
-   * @param  {...Entity} entities
+   * @param  {...Circle} entities
    */
   constructor(width, height, ...entities) {
     this.entities = {};
@@ -149,12 +174,12 @@ class World {
   }
 
   /**
-   * @param  {...Entity} entities
+   * @param  {...Circle} entities
    */
   addEntities(...entities) {
     entities.forEach(
       /**
-       * @param {Entity} element
+       * @param {Circle} element
        */
       (element) => {
         if (!(element instanceof Entity))

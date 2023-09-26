@@ -10,8 +10,8 @@ const clients = {};
 const world = new World(
   100n,
   60n,
-  new Entities.Player(10, 20, 2),
-  new Entities.Player(50, 35, 1.5)
+  new Entities.Player(10, 20, 2, "#ff0000"),
+  new Entities.Player(50, 35, 1.5, "#0000ff")
 );
 
 // Websocket Server
@@ -137,7 +137,8 @@ async function fetchWorld() {
   this.queue.push(await createMessage(4, await getUser.bind(this)()));
 
   for (const [uuid, entity] of Object.entries(world.entities)) {
-    const infoView = new DataView(new ArrayBuffer(20));
+    const infoView = new DataView(new ArrayBuffer(23));
+    const colourValue = colour(entity.colour);
     this.queue.push(
       await createMessage(
         5,
@@ -145,6 +146,9 @@ async function fetchWorld() {
         (infoView.setFloat64(0, entity.x),
         infoView.setFloat64(8, entity.y),
         infoView.setFloat32(16, entity.radius),
+        infoView.setUint8(20, colourValue[0]),
+        infoView.setUint8(21, colourValue[1]),
+        infoView.setUint8(22, colourValue[2]),
         infoView.buffer),
         entity.uuid.buff
       )
@@ -197,12 +201,16 @@ function* createData() {
   for (const [uuid, entity] of Object.entries(world.entities)) {
     yield new Promise(async function (resolve, reject) {
       try {
-        const infoView = new DataView(new ArrayBuffer(20));
+        const infoView = new DataView(new ArrayBuffer(23));
+        const colourValue = colour(entity.colour);
         const data = await new Blob([
           new Uint8Array([0]),
           (infoView.setFloat64(0, entity.x),
           infoView.setFloat64(8, entity.y),
           infoView.setFloat32(16, entity.radius),
+          infoView.setUint8(20, colourValue[0]),
+          infoView.setUint8(21, colourValue[1]),
+          infoView.setUint8(22, colourValue[2]),
           infoView.buffer),
           entity.uuid.buff,
         ]).arrayBuffer();
@@ -229,6 +237,19 @@ async function gameTick(depth) {
     }
   }
   setTimeout(gameTick, 25, (depth + 1) % 4);
+}
+
+/**
+ *
+ * @param {string} hex
+ * @returns {Array}
+ */
+function colour(hex) {
+  const result = [];
+  result.push(parseInt(hex.slice(1, 3), 16));
+  result.push(parseInt(hex.slice(3, 5), 16));
+  result.push(parseInt(hex.slice(5), 16));
+  return result;
 }
 
 setTimeout(gameTick, 25, 0);
