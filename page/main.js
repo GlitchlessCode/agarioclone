@@ -111,7 +111,7 @@ async function parseMessage({ data }) {
         dataView.getFloat64(12),
         9
       );
-      console.log(await Promise.all(getEntities(dataView)));
+      world.update(getEntities(dataView));
       break;
     case 0:
       console.log("init");
@@ -193,6 +193,7 @@ function interpolatedCam(
 ) {
   camera.x = (depth / divide) * startX + (1 - depth / divide) * targetX;
   camera.y = (depth / divide) * startY + (1 - depth / divide) * targetY;
+  world.interpolate(depth / divide);
   if (depth > 0)
     interpolator = setTimeout(
       interpolatedCam,
@@ -257,26 +258,37 @@ function colour(...values) {
 }
 
 /**
- * @param {ArrayBuffer} dataSet
+ * @typedef {Object} PseudoEntity
+ * @property {0|1|2|3} type
+ * @property {number} x
+ * @property {number} y
+ * @property {number} radius
+ * @property {string} colour
+ * @property {string} uuid
  */
-function* getEntities(dataSet) {
+
+/**
+ * @param {ArrayBuffer} dataSet
+ * @returns {PseudoEntity}
+ */
+function getEntities(dataSet) {
+  const entities = [];
   for (let i = 0; i < dataSet.getUint32(0); i++) {
-    yield new Promise((resolve, reject) => {
-      const entityView = new DataView(
-        dataSet.buffer.slice(20 + i * 56, 20 + (i + 1) * 56)
-      );
-      resolve({
-        type: entityView.getUint8(0),
-        x: entityView.getFloat64(1),
-        y: entityView.getFloat64(9),
-        radius: entityView.getFloat32(17),
-        colour: colour(
-          entityView.getUint8(21),
-          entityView.getUint8(22),
-          entityView.getUint8(23)
-        ),
-        uuid: uuid(entityView.buffer.slice(-32)),
-      });
+    const entityView = new DataView(
+      dataSet.buffer.slice(20 + i * 56, 20 + (i + 1) * 56)
+    );
+    entities.push({
+      type: entityView.getUint8(0),
+      x: entityView.getFloat64(1),
+      y: entityView.getFloat64(9),
+      radius: entityView.getFloat32(17),
+      colour: colour(
+        entityView.getUint8(21),
+        entityView.getUint8(22),
+        entityView.getUint8(23)
+      ),
+      uuid: uuid(entityView.buffer.slice(-32)),
     });
   }
+  return entities;
 }

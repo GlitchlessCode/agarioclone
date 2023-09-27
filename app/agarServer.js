@@ -21,7 +21,7 @@ function stringToColour(str) {
   });
   let colour = "#";
   for (let i = 0; i < 3; i++) {
-    const value = (hash >> (i * 8)) & 0xff;
+    const value = clamp((hash >> (i * 8)) & 0xff, 1, 190);
     colour += value.toString(16).padStart(2, "0");
   }
   return colour;
@@ -207,6 +207,12 @@ class World {
       user.x = clamp(user.x, 0, this.width);
       user.y = clamp(user.y, 0, this.height);
     }
+    Object.entries(this.entities)[0][1].x =
+      5 + Math.sin((Date.now() / 500) * 2);
+    Object.entries(this.entities)[0][1].y =
+      5 + Math.cos((Date.now() / 500) * 2);
+    Object.entries(this.entities)[1][1].radius =
+      2 + Math.sin(Date.now() / 1000);
   }
 
   get width() {

@@ -6,11 +6,23 @@ function clamp(value, min, max) {
 
 class Entity {
   /** @type {number} */
-  x;
+  #trueX;
   /** @type {number} */
-  y;
+  #trueY;
   /** @type {number} */
-  radius;
+  #currX;
+  /** @type {number} */
+  #currY;
+  /** @type {number} */
+  #prevX;
+  /** @type {number} */
+  #prevY;
+  /** @type {number} */
+  #trueRadius;
+  /** @type {number} */
+  #prevRadius;
+  /** @type {number} */
+  #currRadius;
   /** @type {string} */
   #uuid;
   /** @type {string} */
@@ -24,9 +36,15 @@ class Entity {
   constructor(x, y, radius, colour, uuid) {
     this.#uuid = uuid;
     this.#colour = colour;
-    this.x = x;
-    this.y = y;
-    this.radius = radius;
+    this.#trueX = x;
+    this.#trueY = y;
+    this.#prevX = x;
+    this.#prevY = y;
+    this.#currX = x;
+    this.#currY = y;
+    this.#trueRadius = radius;
+    this.#prevRadius = radius;
+    this.#currRadius = radius;
   }
 
   get uuid() {
@@ -37,7 +55,48 @@ class Entity {
     return this.#colour;
   }
 
-  update() {}
+  get radius() {
+    return this.#trueRadius;
+  }
+
+  get x() {
+    return this.#trueX;
+  }
+
+  get y() {
+    return this.#trueY;
+  }
+
+  set x(newVal) {
+    this.#prevX = this.#trueX;
+    this.#currX = newVal;
+  }
+
+  set y(newVal) {
+    this.#prevY = this.#trueY;
+    this.#currY = newVal;
+  }
+
+  set radius(newVal) {
+    this.#prevRadius = this.#trueRadius;
+    this.#currRadius = newVal;
+  }
+
+  interpolate(delta) {
+    this.#trueX = delta * this.#prevX + (1 - delta) * this.#currX;
+    this.#trueY = delta * this.#prevY + (1 - delta) * this.#currY;
+    this.#trueRadius =
+      delta * this.#prevRadius + (1 - delta) * this.#currRadius;
+  }
+
+  draw() {
+    return {
+      x: this.x,
+      y: this.y,
+      r: this.radius,
+      c: this.colour,
+    };
+  }
 }
 
 class Player extends Entity {
@@ -126,22 +185,62 @@ class World {
     /** @type {Array.<{x:number, y:number, r:number, c:string}>}*/
     const result = new Array();
     for (const [key, entity] of Object.entries(this.#entities)) {
-      if (entity instanceof Entity)
-        result.push({
-          x: entity.x,
-          y: entity.y,
-          r: entity.radius,
-          c: entity.colour,
-        });
+      if (entity instanceof Entity) result.push(entity.draw());
     }
     return result;
   }
 
-  update() {
-    for (const [uuid, entity] of Object.entries(this.#entities)) {
-      entity.x = Math.sin(Date.now());
+  /**
+   * @typedef {Object} PseudoEntity
+   * @property {0|1|2|3} type
+   * @property {number} x
+   * @property {number} y
+   * @property {number} radius
+   * @property {string} colour
+   * @property {string} uuid
+   */
+
+  /**
+   * @param {Array.<PseudoEntity>} entityInfo
+   */
+  update(entityInfo) {
+    const entities = [];
+    for (const pseudoEntity of entityInfo) {
+      if (Object.hasOwn(this.#entities, pseudoEntity.uuid)) {
+        const entity = this.#entities[pseudoEntity.uuid];
+        entity.x = pseudoEntity.x;
+        entity.y = pseudoEntity.y;
+        entity.radius = pseudoEntity.radius;
+      } else {
+        const params = [
+          pseudoEntity.x,
+          pseudoEntity.y,
+          pseudoEntity.radius,
+          pseudoEntity.colour,
+          pseudoEntity.uuid,
+        ];
+        switch (pseudoEntity.type) {
+          case 0:
+            entities.push(new Player(...params));
+            break;
+          case 1:
+            entities.push(new Virus(...params));
+            break;
+          case 2:
+            entities.push(new Food(...params));
+            break;
+          case 3:
+            entities.push(new Mass(...params));
+            break;
+        }
+      }
     }
-    console.log(hash(JSON.stringify(this.#entities)));
+  }
+
+  interpolate(delta) {
+    for (const [uuid, entity] of Object.entries(this.#entities)) {
+      entity.interpolate(delta);
+    }
   }
 
   get width() {
