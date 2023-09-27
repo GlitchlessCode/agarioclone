@@ -111,9 +111,7 @@ async function parseMessage({ data }) {
         dataView.getFloat64(12),
         9
       );
-      for (let i = 0; i < dataView.getUint32(0); i++) {
-        // const entityView = new DataView(dataView.buffer.slice(20 + i*, ))
-      }
+      console.log(await Promise.all(getEntities(dataView)));
       break;
     case 0:
       console.log("init");
@@ -256,4 +254,29 @@ function colour(...values) {
   result += values[1].toString(16).padStart(2, 0);
   result += values[2].toString(16).padStart(2, 0);
   return result;
+}
+
+/**
+ * @param {ArrayBuffer} dataSet
+ */
+function* getEntities(dataSet) {
+  for (let i = 0; i < dataSet.getUint32(0); i++) {
+    yield new Promise((resolve, reject) => {
+      const entityView = new DataView(
+        dataSet.buffer.slice(20 + i * 56, 20 + (i + 1) * 56)
+      );
+      resolve({
+        type: entityView.getUint8(0),
+        x: entityView.getFloat64(1),
+        y: entityView.getFloat64(9),
+        radius: entityView.getFloat32(17),
+        colour: colour(
+          entityView.getUint8(21),
+          entityView.getUint8(22),
+          entityView.getUint8(23)
+        ),
+        uuid: uuid(entityView.buffer.slice(-32)),
+      });
+    });
+  }
 }

@@ -248,6 +248,8 @@ function uuid() {
 
 module.exports = {
   World,
+  Circle,
+  Entity,
   uuid,
   clamp,
   Entities: {

@@ -134,7 +134,7 @@ async function fetchWorld() {
     )
   );
 
-  this.queue.push(await createMessage(4, await getUser.bind(this)()));
+  this.queue.push(await createMessage(4, getUser.bind(this)()));
 
   for (const [uuid, entity] of Object.entries(world.entities)) {
     const infoView = new DataView(new ArrayBuffer(23));
@@ -142,7 +142,7 @@ async function fetchWorld() {
     this.queue.push(
       await createMessage(
         5,
-        new Uint8Array([0]),
+        new Uint8Array([getType(entity)]),
         (infoView.setFloat64(0, entity.x),
         infoView.setFloat64(8, entity.y),
         infoView.setFloat32(16, entity.radius),
@@ -163,12 +163,11 @@ async function fetchWorld() {
  */
 function getUser() {
   const posBuffer = new ArrayBuffer(16);
-  return new Blob([
-    (new DataView(posBuffer).setFloat64(0, world.users[this.id.UUID].x),
-    posBuffer),
-    (new DataView(posBuffer).setFloat64(8, world.users[this.id.UUID].y),
-    posBuffer),
-  ]).arrayBuffer();
+  return (
+    new DataView(posBuffer).setFloat64(0, world.users[this.id.UUID].x),
+    new DataView(posBuffer).setFloat64(8, world.users[this.id.UUID].y),
+    posBuffer
+  );
 }
 
 /**
@@ -187,7 +186,7 @@ function* sendTick(tickData) {
               new Uint8Array([Object.keys(world.entities).length])
             ),
             infoView),
-            await getUser.bind(ws)(),
+            getUser.bind(ws)(),
             ...tickData
           )
         );
@@ -204,7 +203,7 @@ function* createData() {
         const infoView = new DataView(new ArrayBuffer(23));
         const colourValue = colour(entity.colour);
         const data = await new Blob([
-          new Uint8Array([0]),
+          new Uint8Array([getType(entity)]),
           (infoView.setFloat64(0, entity.x),
           infoView.setFloat64(8, entity.y),
           infoView.setFloat32(16, entity.radius),
@@ -237,6 +236,17 @@ async function gameTick(depth) {
     }
   }
   setTimeout(gameTick, 25, (depth + 1) % 4);
+}
+
+/**
+ * @param {Circle} entity
+ */
+function getType(entity) {
+  if (entity instanceof Entities.Player) return 0;
+  if (entity instanceof Entities.Virus) return 1;
+  if (entity instanceof Entities.Food) return 2;
+  if (entity instanceof Entities.Mass) return 3;
+  throw new Error("Invalid Entity Configuration");
 }
 
 /**
