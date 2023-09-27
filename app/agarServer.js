@@ -212,7 +212,7 @@ class World {
     Object.entries(this.entities)[0][1].y =
       5 + Math.cos((Date.now() / 500) * 2);
     Object.entries(this.entities)[1][1].radius =
-      2 + Math.sin(Date.now() / 1000);
+      4 + Math.sin(Date.now() / 1000) * 3;
   }
 
   get width() {

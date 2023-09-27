@@ -235,6 +235,7 @@ class World {
         }
       }
     }
+    this.addEntities(...entities);
   }
 
   interpolate(delta) {
@@ -340,7 +341,11 @@ class Camera {
 
     if (this.world instanceof World) {
       // Draw Entities
-      this.world.draw().forEach(({ x, y, r, c }) => {
+      const drawArray = this.world.draw();
+      drawArray.sort((a, b) => {
+        return a.r - b.r;
+      });
+      drawArray.forEach(({ x, y, r, c }) => {
         this.ctx.fillStyle = c;
         this.ctx.beginPath();
         this.ctx.arc(

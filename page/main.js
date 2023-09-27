@@ -207,24 +207,6 @@ function interpolatedCam(
     );
 }
 
-// When window is loaded
-window.onload = async function () {
-  let resolver = new Deferred();
-  const ws = new WebSocket(
-    `${location.protocol == "http:" ? "ws" : "wss"}://${location.host}`
-  );
-  ws.addEventListener("open", function () {
-    console.log("Connection Established!");
-    resolver.resolve();
-  });
-  ws.addEventListener("message", parseMessage.bind(ws));
-  ws.addEventListener("close", function () {
-    console.log("Connection Closed!");
-  });
-  await resolver.promise;
-  requestAnimationFrame(drawFrame);
-};
-
 /**
  * @this WebSocket
  */
@@ -292,3 +274,21 @@ function getEntities(dataSet) {
   }
   return entities;
 }
+
+// When window is loaded
+window.onload = async function () {
+  let resolver = new Deferred();
+  const ws = new WebSocket(
+    `${location.protocol == "http:" ? "ws" : "wss"}://${location.host}`
+  );
+  ws.addEventListener("open", function () {
+    console.log("Connection Established!");
+    resolver.resolve();
+  });
+  ws.addEventListener("message", parseMessage.bind(ws));
+  ws.addEventListener("close", function () {
+    console.log("Connection Closed!");
+  });
+  await resolver.promise;
+  requestAnimationFrame(drawFrame);
+};
