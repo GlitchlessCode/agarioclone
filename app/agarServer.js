@@ -21,15 +21,13 @@ function stringToColour(str) {
   });
   let colour = "#";
   for (let i = 0; i < 3; i++) {
-    const value = clamp((hash >> (i * 8)) & 0xff, 1, 190);
+    const value = clamp((hash >> (i * 8)) & 0xff, 50, 130);
     colour += value.toString(16).padStart(2, "0");
   }
   return colour;
 }
 
 class Entity {
-  /** @type {boolean} */
-  different;
   /** @type {number} */
   x;
   /** @type {number} */
@@ -46,7 +44,6 @@ class Entity {
     this.#uuid = UUID ? UUID : uuid();
     this.x = x;
     this.y = y;
-    this.different = true;
   }
 
   get uuid() {
@@ -57,36 +54,41 @@ class Entity {
 }
 
 class Circle extends Entity {
-  /** @type {number} */
-  radius;
   /** @type {string} */
-  #colour;
+  colour;
+  /**@type {number} */
+  mass;
   /**
    * @param {number} x
    * @param {number} y
-   * @param {number} radius
    * @param {string} colour
    */
-  constructor(x, y, radius, colour) {
+  constructor(x, y, colour, mass) {
     super(x, y);
-    this.radius = radius;
-    this.#colour = colour;
+    this.colour = colour;
+    this.mass = mass;
   }
 
-  get colour() {
-    return this.#colour;
+  get radius() {
+    return Math.sqrt(this.mass / Math.PI);
   }
 }
 
 class Player extends Circle {
+  /** @type {string} */
+  #userID;
   /**
    * @param {number} x
    * @param {number} y
-   * @param {number} radius
-   * @param {string} colour
+   * @param {string} userID
    */
-  constructor(x, y, radius, colour) {
-    super(x, y, radius, colour);
+  constructor(x, y, userID) {
+    super(x, y, "#00000000", 25);
+    this.#userID = userID;
+  }
+
+  get userID() {
+    return this.#userID;
   }
 }
 
@@ -94,10 +96,9 @@ class Food extends Circle {
   /**
    * @param {number} x
    * @param {number} y
-   * @param {number} radius
    */
-  constructor(x, y, radius) {
-    super(x, y, radius, stringToColour((Math.random() * 10).toString()));
+  constructor(x, y) {
+    super(x, y, stringToColour((Math.random() * 10).toString()), 1);
   }
 }
 
@@ -105,10 +106,9 @@ class Virus extends Circle {
   /**
    * @param {number} x
    * @param {number} y
-   * @param {number} radius
    */
-  constructor(x, y, radius) {
-    super(x, y, radius, "#77ff77");
+  constructor(x, y) {
+    super(x, y, "#77ff77", 118);
   }
 }
 
@@ -116,26 +116,45 @@ class Mass extends Circle {
   /**
    * @param {number} x
    * @param {number} y
-   * @param {number} radius
+   * @param {string} colour
    */
-  constructor(x, y, radius, colour) {
-    super(x, y, radius, colour);
+  constructor(x, y, colour) {
+    super(x, y, colour, 12);
   }
 }
 
 class User extends Entity {
   /** @type {{x: number, y:number}} */
   mouse;
+  /** @type {Object.<string, Player>} */
+  players;
   /**
    * @param {number} x
    * @param {number} y
-   * @param {number} radius
    * @param {string} [UUID]
    */
   constructor(x, y, UUID) {
     super(x, y, UUID);
     this.mouse = { x: 0, y: 0 };
+    const ref = this;
+    this.players = new Proxy(
+      {},
+      {
+        /**
+         * @param {{}} target
+         * @param {string} prop
+         * @param {Player} player
+         * @returns
+         */
+        set(target, property, player) {
+          player.colour = stringToColour(ref.uuid.UUID);
+          return Reflect.set(...arguments);
+        },
+      }
+    );
   }
+
+  kill() {}
 }
 
 class World {
@@ -188,8 +207,10 @@ class World {
           if (element instanceof User) this.users[element.uuid.UUID] = element;
           else {
             this.entities[element.uuid.UUID] = element;
-            if (element instanceof Player)
+            if (element instanceof Player) {
               this.players[element.uuid.UUID] = element;
+              this.users[element.userID].players[element.uuid.UUID] = element;
+            }
             if (element instanceof Virus)
               this.viruses[element.uuid.UUID] = element;
             if (element instanceof Food) this.food[element.uuid.UUID] = element;
@@ -207,12 +228,6 @@ class World {
       user.x = clamp(user.x, 0, this.width);
       user.y = clamp(user.y, 0, this.height);
     }
-    Object.entries(this.entities)[0][1].x =
-      5 + Math.sin((Date.now() / 500) * 2);
-    Object.entries(this.entities)[0][1].y =
-      5 + Math.cos((Date.now() / 500) * 2);
-    Object.entries(this.entities)[1][1].radius =
-      4 + Math.sin(Date.now() / 1000) * 3;
   }
 
   get width() {

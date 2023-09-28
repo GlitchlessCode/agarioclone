@@ -358,17 +358,6 @@ class Camera {
         this.ctx.fill();
       });
     }
-
-    this.ctx.fillStyle = "red";
-    this.ctx.beginPath();
-    this.ctx.arc(
-      this.cnv.width / 2,
-      this.cnv.height / 2,
-      scale / 2,
-      0,
-      Math.PI * 2
-    );
-    this.ctx.fill();
   }
 
   get x() {

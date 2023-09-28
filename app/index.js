@@ -7,11 +7,17 @@ const { World, Entities, uuid, clamp } = require("./agarServer");
 const app = express();
 const clients = {};
 
-const world = new World(
-  100n,
-  60n,
-  new Entities.Player(10, 20, 2, "#ff0000"),
-  new Entities.Player(50, 35, 1.5, "#0000ff")
+const world = new World(100n, 60n);
+world.addEntities(
+  ...Array.from(
+    { length: 100 },
+    () =>
+      new Entities.Food(
+        Math.random() * world.width,
+        Math.random() * world.height,
+        0.3
+      )
+  )
 );
 
 // Websocket Server
@@ -31,7 +37,10 @@ wsServer.on("connection", async function (ws, req) {
       Math.random() * world.width,
       Math.random() * world.height,
       UUID
-    )
+    ),
+    new Entities.Player(0, 0, UUID.UUID),
+    new Entities.Player(10, 0, UUID.UUID),
+    new Entities.Player(20, 0, UUID.UUID)
   );
   ws.on("close", function (code, reason) {
     delete clients[this.id.UUID];
