@@ -11,6 +11,14 @@ function clamp(value, min, max) {
 }
 
 /**
+ * @param {Array} arr
+ * @returns {number}
+ */
+function arrAverage(arr) {
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+
+/**
  * @param {string} str
  * @returns {string}
  */
@@ -21,7 +29,7 @@ function stringToColour(str) {
   });
   let colour = "#";
   for (let i = 0; i < 3; i++) {
-    const value = clamp((hash >> (i * 8)) & 0xff, 50, 130);
+    const value = clamp((hash >> (i * 8)) & 0xff, 20, 180);
     colour += value.toString(16).padStart(2, "0");
   }
   return colour;
@@ -128,12 +136,15 @@ class User extends Entity {
   mouse;
   /** @type {Object.<string, Player>} */
   players;
+  /** @type {World} */
+  world;
   /**
    * @param {number} x
    * @param {number} y
    * @param {string} [UUID]
+   * @param {World} world
    */
-  constructor(x, y, UUID) {
+  constructor(x, y, UUID, world) {
     super(x, y, UUID);
     this.mouse = { x: 0, y: 0 };
     const ref = this;
@@ -152,9 +163,16 @@ class User extends Entity {
         },
       }
     );
+    this.world = world;
   }
 
-  kill() {}
+  kill() {
+    for (const [uuid, player] of Object.entries(this.players)) {
+      delete this.world.entities[uuid];
+      delete this.world.players[uuid];
+    }
+    delete this.world.users[this.uuid.UUID];
+  }
 }
 
 class World {
@@ -223,8 +241,24 @@ class World {
 
   update() {
     for (const [uuid, user] of Object.entries(this.users)) {
-      user.x += clamp(user.mouse.x, -0.5, 0.5) / 1.6;
-      user.y += clamp(user.mouse.y, -0.5, 0.5) / 1.6;
+      // user.x += clamp(user.mouse.x, -0.5, 0.5) / 1.6;
+      // user.y += clamp(user.mouse.y, -0.5, 0.5) / 1.6;
+      const players = Object.values(user.players);
+
+      players.forEach((player) => {
+        player.x +=
+          (5 / player.radius + 0.23) * 2 * clamp(user.mouse.x, -0.5, 0.5);
+        player.y +=
+          (5 / player.radius + 0.23) * 2 * clamp(user.mouse.y, -0.5, 0.5);
+
+        player.x = clamp(player.x, 0, this.width);
+        player.y = clamp(player.y, 0, this.height);
+      });
+
+      user.x = arrAverage(players.map((player) => player.x));
+      user.y = arrAverage(players.map((player) => player.y));
+
+      // Clamp (just in case)
       user.x = clamp(user.x, 0, this.width);
       user.y = clamp(user.y, 0, this.height);
     }

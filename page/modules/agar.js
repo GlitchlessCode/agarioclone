@@ -204,6 +204,12 @@ class World {
    * @param {Array.<PseudoEntity>} entityInfo
    */
   update(entityInfo) {
+    if (entityInfo.length < Object.keys(this.#entities).length) {
+      const culled = Object.entries(this.#entities).filter(([uuid, entity]) => {
+        return !entityInfo.map(({ uuid }) => uuid).includes(uuid);
+      });
+      culled.forEach(([key, entity]) => delete this.#entities[key]);
+    }
     const entities = [];
     for (const pseudoEntity of entityInfo) {
       if (Object.hasOwn(this.#entities, pseudoEntity.uuid)) {

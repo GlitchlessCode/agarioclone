@@ -32,18 +32,17 @@ wsServer.on("connection", async function (ws, req) {
     tickReady: false,
   };
   clients[UUID] = ws;
+  const rand = {
+    x: Math.random() * world.width,
+    y: Math.random() * world.height,
+  };
   world.addEntities(
-    new Entities.User(
-      Math.random() * world.width,
-      Math.random() * world.height,
-      UUID
-    ),
-    new Entities.Player(0, 0, UUID.UUID),
-    new Entities.Player(10, 0, UUID.UUID),
-    new Entities.Player(20, 0, UUID.UUID)
+    new Entities.User(rand.x, rand.y, UUID, world),
+    new Entities.Player(rand.x, rand.y, UUID.UUID)
   );
   ws.on("close", function (code, reason) {
     delete clients[this.id.UUID];
+    world.users[this.id.UUID].kill();
     console.log("Connection Closed!");
   });
   ws.on("message", parseMessage);
