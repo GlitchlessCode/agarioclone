@@ -6,7 +6,7 @@ const crypto = require("crypto");
  * @param {number} max
  * @returns {number}
  */
-function clamp(value, min, max) {
+function clamp(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value));
 }
 
@@ -85,6 +85,13 @@ class Circle extends Entity {
 class Player extends Circle {
   /** @type {string} */
   #userID;
+  /** @type {Object.<string, Player>} */
+  siblings;
+  /** @type {number} */
+  velX;
+  /** @type {number} */
+  velY;
+
   /**
    * @param {number} x
    * @param {number} y
@@ -93,6 +100,8 @@ class Player extends Circle {
   constructor(x, y, userID) {
     super(x, y, "#00000000", 25);
     this.#userID = userID;
+    this.velX = 0;
+    this.velY = 0;
   }
 
   get userID() {
@@ -159,6 +168,7 @@ class User extends Entity {
          */
         set(target, property, player) {
           player.colour = stringToColour(ref.uuid.UUID);
+          player.siblings = ref.players;
           return Reflect.set(...arguments);
         },
       }
@@ -241,15 +251,22 @@ class World {
 
   update() {
     for (const [uuid, user] of Object.entries(this.users)) {
-      // user.x += clamp(user.mouse.x, -0.5, 0.5) / 1.6;
-      // user.y += clamp(user.mouse.y, -0.5, 0.5) / 1.6;
       const players = Object.values(user.players);
 
       players.forEach((player) => {
+        player.velX = player.velX * 0.99;
+        player.velY = player.velY * 0.99;
+
         player.x +=
-          (5 / player.radius + 0.23) * 2 * clamp(user.mouse.x, -0.5, 0.5);
+          (5 / (player.radius * 10) + 0.23) *
+            4 *
+            clamp(user.mouse.x, -0.25, 0.25) +
+          player.velX;
         player.y +=
-          (5 / player.radius + 0.23) * 2 * clamp(user.mouse.y, -0.5, 0.5);
+          (5 / (player.radius * 10) + 0.23) *
+            4 *
+            clamp(user.mouse.y, -0.25, 0.25) +
+          player.velY;
 
         player.x = clamp(player.x, 0, this.width);
         player.y = clamp(player.y, 0, this.height);
