@@ -251,6 +251,23 @@ class User extends Entity {
     }
     delete this.world.users[this.uuid.UUID];
   }
+
+  get bounds() {
+    return {
+      left: Math.min(
+        ...Object.values(this.players).map((player) => player.x - player.radius)
+      ),
+      right: Math.max(
+        ...Object.values(this.players).map((player) => player.x + player.radius)
+      ),
+      top: Math.min(
+        ...Object.values(this.players).map((player) => player.y - player.radius)
+      ),
+      bottom: Math.max(
+        ...Object.values(this.players).map((player) => player.y + player.radius)
+      ),
+    };
+  }
 }
 
 class World {
@@ -270,13 +287,15 @@ class World {
   #width;
   /** @type {bigint} */
   #height;
+  /** @type {number} */
+  minFood;
 
   /**
    * @param {bigint} width
    * @param {bigint} height
    * @param  {...Circle} entities
    */
-  constructor(width, height, ...entities) {
+  constructor(width, height, minFood, ...entities) {
     this.entities = {};
     this.players = {};
     this.viruses = {};
@@ -286,6 +305,7 @@ class World {
     this.addEntities(...entities);
     this.#width = width;
     this.#height = height;
+    this.minFood = minFood;
   }
 
   /**
@@ -326,12 +346,12 @@ class World {
         player.velY = player.velY * 0.9;
 
         player.x +=
-          (5 / (player.radius * 10) + 0.23) *
+          (8 / (player.radius * 10) + 0.13) *
             4 *
             clamp(user.mouse.x, -0.25, 0.25) +
           player.velX;
         player.y +=
-          (5 / (player.radius * 10) + 0.23) *
+          (8 / (player.radius * 10) + 0.13) *
             4 *
             clamp(user.mouse.y, -0.25, 0.25) +
           player.velY;
@@ -340,8 +360,8 @@ class World {
         player.y = clamp(player.y, 0, this.height);
       });
 
-      user.x = arrAverage(players.map((player) => player.x));
-      user.y = arrAverage(players.map((player) => player.y));
+      user.x = (user.bounds.left + user.bounds.right) / 2;
+      user.y = (user.bounds.top + user.bounds.bottom) / 2;
 
       // Clamp (just in case)
       user.x = clamp(user.x, 0, this.width);
@@ -361,6 +381,22 @@ class World {
       } else if (larger instanceof Virus && smaller instanceof Mass) {
       }
     });
+
+    // TODO: Add cohesion force, moving Players towards User
+
+    if (Object.keys(this.food).length < this.minFood) {
+      this.addEntities(
+        ...Array.from(
+          { length: this.minFood - Object.keys(this.food).length },
+          () =>
+            new Food(
+              Math.random() * this.width,
+              Math.random() * this.height,
+              0.3
+            )
+        )
+      );
+    }
   }
 
   get width() {

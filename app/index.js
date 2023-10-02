@@ -7,18 +7,7 @@ const { World, Entities, uuid, clamp, getType } = require("./agarServer");
 const app = express();
 const clients = {};
 
-const world = new World(100n, 60n);
-world.addEntities(
-  ...Array.from(
-    { length: 100 },
-    () =>
-      new Entities.Food(
-        Math.random() * world.width,
-        Math.random() * world.height,
-        0.3
-      )
-  )
-);
+const world = new World(100n, 60n, 100);
 
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
