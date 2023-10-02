@@ -1,6 +1,17 @@
 const crypto = require("crypto");
 
 /**
+ * @param {Circle} entity
+ */
+function getType(entity) {
+  if (entity instanceof Player) return 0;
+  if (entity instanceof Virus) return 1;
+  if (entity instanceof Food) return 2;
+  if (entity instanceof Mass) return 3;
+  throw new Error("Invalid Entity Configuration");
+}
+
+/**
  * @param {number} value
  * @param {number} min
  * @param {number} max
@@ -35,6 +46,46 @@ function stringToColour(str) {
   return colour;
 }
 
+/**
+ * Bentley-Ottmann algorithm adaptation to find all intersecting circles
+ * @param {Circle[]} circles
+ * @returns {[[Circle, Circle]]}
+ */
+function findCircleIntersections(circles) {
+  /** @type {Array.<{x: number, y:number, circle:Circle, type: "left"|"right"}>} */
+  const events = [];
+  /** @type {[[Circle, Circle]]} */
+  const intersections = [];
+
+  circles.forEach((circle) => {
+    const { x, radius } = circle;
+    events.push(
+      { x: x - radius, circle, type: "left" },
+      { x: x + radius, circle, type: "right" }
+    );
+  });
+
+  events.sort((a, b) => a.x - b.x);
+
+  const activeCircles = new Set();
+  events.forEach(({ circle, type }) => {
+    if (type === "left") {
+      activeCircles.forEach((activeCircle) => {
+        if (circle.intersecting(activeCircle)) {
+          if (circle.radius >= activeCircle.radius)
+            intersections.push([circle, activeCircle]);
+          else intersections.push([activeCircle, circle]);
+        }
+      });
+      activeCircles.add(circle);
+    } else {
+      activeCircles.delete(circle);
+    }
+  });
+
+  return intersections;
+}
+
 class Entity {
   /** @type {number} */
   x;
@@ -58,7 +109,12 @@ class Entity {
     return this.#uuid;
   }
 
-  update() {}
+  /**
+   * @param {Entity} entity
+   */
+  getDistance(entity) {
+    return Math.hypot(this.x - entity.x, this.y - entity.y);
+  }
 }
 
 class Circle extends Entity {
@@ -75,6 +131,18 @@ class Circle extends Entity {
     super(x, y);
     this.colour = colour;
     this.mass = mass;
+  }
+
+  /**
+   * @param {Entity} entity
+   * @returns {boolean}
+   */
+  intersecting(entity) {
+    return this.getDistance(entity) <= this.radius + entity.radius;
+  }
+
+  encloses(entity) {
+    return this.getDistance(entity) + entity.radius <= this.radius;
   }
 
   get radius() {
@@ -254,8 +322,8 @@ class World {
       const players = Object.values(user.players);
 
       players.forEach((player) => {
-        player.velX = player.velX * 0.99;
-        player.velY = player.velY * 0.99;
+        player.velX = player.velX * 0.9;
+        player.velY = player.velY * 0.9;
 
         player.x +=
           (5 / (player.radius * 10) + 0.23) *
@@ -279,6 +347,20 @@ class World {
       user.x = clamp(user.x, 0, this.width);
       user.y = clamp(user.y, 0, this.height);
     }
+
+    const intersections = findCircleIntersections(Object.values(this.entities));
+    intersections.forEach(([larger, smaller]) => {
+      if (larger instanceof Player && smaller instanceof Food) {
+        if (!larger.encloses(smaller)) return;
+        larger.mass++;
+        delete this.entities[smaller.uuid.UUID];
+        delete this.food[smaller.uuid.UUID];
+      } else if (larger instanceof Player && smaller instanceof Player) {
+      } else if (larger instanceof Player && smaller instanceof Virus) {
+      } else if (larger instanceof Player && smaller instanceof Mass) {
+      } else if (larger instanceof Virus && smaller instanceof Mass) {
+      }
+    });
   }
 
   get width() {
@@ -324,6 +406,7 @@ module.exports = {
   Entity,
   uuid,
   clamp,
+  getType,
   Entities: {
     Player,
     Virus,

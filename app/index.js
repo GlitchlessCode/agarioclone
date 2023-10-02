@@ -2,7 +2,7 @@
 const express = require("express");
 const ws = require("ws");
 const path = require("path");
-const { World, Entities, uuid, clamp } = require("./agarServer");
+const { World, Entities, uuid, clamp, getType } = require("./agarServer");
 
 const app = express();
 const clients = {};
@@ -230,6 +230,19 @@ function* createData() {
 }
 
 /**
+ *
+ * @param {string} hex
+ * @returns {Array}
+ */
+function colour(hex) {
+  const result = [];
+  result.push(parseInt(hex.slice(1, 3), 16));
+  result.push(parseInt(hex.slice(3, 5), 16));
+  result.push(parseInt(hex.slice(5), 16));
+  return result;
+}
+
+/**
  * @param {0|1|2|3} depth
  */
 async function gameTick(depth) {
@@ -244,30 +257,6 @@ async function gameTick(depth) {
     }
   }
   setTimeout(gameTick, 25, (depth + 1) % 4);
-}
-
-/**
- * @param {Circle} entity
- */
-function getType(entity) {
-  if (entity instanceof Entities.Player) return 0;
-  if (entity instanceof Entities.Virus) return 1;
-  if (entity instanceof Entities.Food) return 2;
-  if (entity instanceof Entities.Mass) return 3;
-  throw new Error("Invalid Entity Configuration");
-}
-
-/**
- *
- * @param {string} hex
- * @returns {Array}
- */
-function colour(hex) {
-  const result = [];
-  result.push(parseInt(hex.slice(1, 3), 16));
-  result.push(parseInt(hex.slice(3, 5), 16));
-  result.push(parseInt(hex.slice(5), 16));
-  return result;
 }
 
 setTimeout(gameTick, 25, 0);
