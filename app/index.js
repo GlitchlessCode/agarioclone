@@ -75,7 +75,14 @@ async function parseMessage(data, isBinary) {
         console.log("init");
         this.gameStatus.init = true;
         await fetchWorld.bind(this)();
-        this.send(await createMessage(2));
+        const infoView = new DataView(new ArrayBuffer(4));
+        this.send(
+          await createMessage(
+            2,
+            (infoView.setInt32(0, Object.values(world.entities).length),
+            infoView.buffer)
+          )
+        );
         break;
       case 1:
         if (this.queue.length == 0) throw new Error("No queue to process");
@@ -159,11 +166,12 @@ async function fetchWorld() {
  * @returns {ArrayBuffer}
  */
 function getUser() {
-  const posBuffer = new ArrayBuffer(16);
+  const posView = new DataView(new ArrayBuffer(20));
   return (
-    new DataView(posBuffer).setFloat64(0, world.users[this.id.UUID].x),
-    new DataView(posBuffer).setFloat64(8, world.users[this.id.UUID].y),
-    posBuffer
+    posView.setFloat64(0, world.users[this.id.UUID].x),
+    posView.setFloat64(8, world.users[this.id.UUID].y),
+    posView.setFloat32(16, world.users[this.id.UUID].scale),
+    posView.buffer
   );
 }
 

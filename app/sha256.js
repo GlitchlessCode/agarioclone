@@ -192,4 +192,4 @@ function Majority(x, y, z) {
   return (x & y) ^ (x & z) ^ (y & z);
 }
 
-export { hash };
+module.exports = { hash };

@@ -1,5 +1,3 @@
-import { hash } from "./sha256.js";
-
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }

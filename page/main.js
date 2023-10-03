@@ -107,8 +107,10 @@ async function parseMessage({ data }) {
         10,
         camera.x,
         camera.y,
+        camera.camScale,
         dataView.getFloat64(4),
         dataView.getFloat64(12),
+        dataView.getFloat32(20),
         9
       );
       world.update(getEntities(dataView));
@@ -119,6 +121,7 @@ async function parseMessage({ data }) {
       break;
     case 2:
       console.log("worldStart");
+      this.worldSize = dataView.getInt32(0);
       this.send(await createMessage(1));
       break;
     case 3:
@@ -130,10 +133,13 @@ async function parseMessage({ data }) {
       console.log("incomingCamera");
       camera.x = dataView.getFloat64(0);
       camera.y = dataView.getFloat64(8);
+      camera.camScale = dataView.getFloat32(16);
       this.send(await createMessage(1));
       break;
     case 5:
       console.log("incomingEntity");
+      this.progress++;
+      console.log(this.progress / this.worldSize);
       let params = [
         dataView.getFloat64(1),
         dataView.getFloat64(9),
@@ -186,13 +192,17 @@ async function parseMessage({ data }) {
 function interpolatedCam(
   startX,
   startY,
+  startScale,
   targetX,
   targetY,
+  targetScale,
   depth,
   divide = depth + 1
 ) {
   camera.x = (depth / divide) * startX + (1 - depth / divide) * targetX;
   camera.y = (depth / divide) * startY + (1 - depth / divide) * targetY;
+  camera.camScale =
+    (depth / divide) * startScale + (1 - depth / divide) * targetScale;
   world.interpolate(depth / divide);
   if (depth > 0)
     interpolator = setTimeout(
@@ -200,8 +210,10 @@ function interpolatedCam(
       100 / divide,
       startX,
       startY,
+      startScale,
       targetX,
       targetY,
+      targetScale,
       depth - 1,
       divide
     );
@@ -255,9 +267,10 @@ function colour(...values) {
  */
 function getEntities(dataSet) {
   const entities = [];
+  let nameOffset = 0;
   for (let i = 0; i < dataSet.getUint32(0); i++) {
     const entityView = new DataView(
-      dataSet.buffer.slice(20 + i * 56, 20 + (i + 1) * 56)
+      dataSet.buffer.slice(24 + nameOffset + i * 56)
     );
     entities.push({
       type: entityView.getUint8(0),
@@ -269,7 +282,7 @@ function getEntities(dataSet) {
         entityView.getUint8(22),
         entityView.getUint8(23)
       ),
-      uuid: uuid(entityView.buffer.slice(-32)),
+      uuid: uuid(entityView.buffer.slice(24)),
     });
   }
   return entities;
@@ -281,6 +294,8 @@ window.onload = async function () {
   const ws = new WebSocket(
     `${location.protocol == "http:" ? "ws" : "wss"}://${location.host}`
   );
+  ws.worldSize = 0;
+  ws.progress = 0;
   ws.addEventListener("open", function () {
     console.log("Connection Established!");
     resolver.resolve();

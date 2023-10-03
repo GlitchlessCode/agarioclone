@@ -107,6 +107,7 @@ class Entity {
     this.#uuid = UUID ? UUID : uuid();
     this.x = x;
     this.y = y;
+    this.different = true;
   }
 
   get uuid() {
@@ -158,7 +159,7 @@ class Circle extends Entity {
   }
 }
 
-class Player extends Circle {
+class _Player extends Circle {
   /** @type {string} */
   #userID;
   /** @type {Object.<string, Player>} */
@@ -204,7 +205,7 @@ class Player extends Circle {
   }
 }
 
-class Food extends Circle {
+class _Food extends Circle {
   /**
    * @param {number} x
    * @param {number} y
@@ -214,7 +215,7 @@ class Food extends Circle {
   }
 }
 
-class Virus extends Circle {
+class _Virus extends Circle {
   /**
    * @param {number} x
    * @param {number} y
@@ -224,7 +225,7 @@ class Virus extends Circle {
   }
 }
 
-class Mass extends Circle {
+class _Mass extends Circle {
   /**
    * @param {number} x
    * @param {number} y
@@ -235,13 +236,15 @@ class Mass extends Circle {
   }
 }
 
-class User extends Entity {
+class _User extends Entity {
   /** @type {{x: number, y:number}} */
   mouse;
   /** @type {Object.<string, Player>} */
   players;
   /** @type {World} */
   world;
+  /** @type {numer} */
+  scale;
   /**
    * @param {number} x
    * @param {number} y
@@ -252,6 +255,7 @@ class User extends Entity {
     super(x, y, UUID);
     this.mouse = { x: 0, y: 0 };
     const ref = this;
+    this.scale = 1;
     this.players = new Proxy(
       {},
       {
@@ -318,6 +322,8 @@ class User extends Entity {
 class World {
   /** @type {Object.<string, Circle>} */
   entities;
+  /** @type {Object.<string, string>} */
+  entitieHashes;
   /** @type {Object.<string, Player>} */
   players;
   /** @type {Object.<string, Virus>} */
@@ -342,6 +348,7 @@ class World {
    */
   constructor(width, height, minFood, ...entities) {
     this.entities = {};
+    this.entitieHashes = {};
     this.players = {};
     this.viruses = {};
     this.food = {};
@@ -443,6 +450,14 @@ class World {
 
       user.x = (user.bounds.left + user.bounds.right) / 2;
       user.y = (user.bounds.top + user.bounds.bottom) / 2;
+
+      user.scale =
+        100 /
+        (Math.max(
+          user.bounds.bottom - user.bounds.top,
+          user.bounds.right - user.bounds.left
+        ) +
+          60);
 
       // Clamp (just in case)
       user.x = clamp(user.x, 0, this.width);
