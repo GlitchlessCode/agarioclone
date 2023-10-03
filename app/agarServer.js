@@ -86,6 +86,10 @@ function findCircleIntersections(circles) {
   return intersections;
 }
 
+function getForce(G, m, M, r) {
+  return (G * m * M) / r ** 2;
+}
+
 class Entity {
   /** @type {number} */
   x;
@@ -141,6 +145,10 @@ class Circle extends Entity {
     return this.getDistance(entity) <= this.radius + entity.radius;
   }
 
+  /**
+   * @param {Entity} entity
+   * @returns {boolean}
+   */
   encloses(entity) {
     return this.getDistance(entity) + entity.radius <= this.radius;
   }
@@ -159,6 +167,8 @@ class Player extends Circle {
   velX;
   /** @type {number} */
   velY;
+  /** @type {number} */
+  mergeTimer;
 
   /**
    * @param {number} x
@@ -170,10 +180,27 @@ class Player extends Circle {
     this.#userID = userID;
     this.velX = 0;
     this.velY = 0;
+    this.mergeTimer = 0;
   }
 
   get userID() {
     return this.#userID;
+  }
+
+  /**
+   * @param {Vector2} vector
+   * @returns {Player}
+   */
+  split(vector) {
+    this.mass = Math.floor(this.mass / 2);
+    this.velX -= vector.x / 6;
+    this.velY -= vector.y / 6;
+
+    const newPlayer = new Player(this.x, this.y, this.userID);
+    newPlayer.velX = vector.x;
+    newPlayer.velY = vector.y;
+    newPlayer.mass = this.mass;
+    return newPlayer;
   }
 }
 
@@ -268,6 +295,24 @@ class User extends Entity {
       ),
     };
   }
+
+  /**
+   * @typedef {{x: number, y:number}} Vector2
+   */
+
+  /**
+   * @returns {Vector2}
+   */
+  get mouseVector() {
+    const clampedX = this.mouse.x;
+    const clampedY = this.mouse.y;
+    const dist = Math.min(Math.hypot(clampedX, clampedY) * 14, 1);
+    const angle = Math.atan2(clampedX, clampedY);
+    return {
+      x: Math.sin(angle) * dist,
+      y: Math.cos(angle) * dist,
+    };
+  }
 }
 
 class World {
@@ -338,6 +383,37 @@ class World {
   }
 
   update() {
+    const intersections = findCircleIntersections(Object.values(this.entities));
+    intersections.forEach(([larger, smaller]) => {
+      if (larger instanceof Player && smaller instanceof Food) {
+        if (!larger.encloses(smaller)) return;
+        larger.mass++;
+        delete this.entities[smaller.uuid.UUID];
+        delete this.food[smaller.uuid.UUID];
+      } else if (larger instanceof Player && smaller instanceof Player) {
+        // TODO: Add Eating & Merge Timer
+        const separation = getForce(
+          -0.01,
+          larger.mass,
+          smaller.mass,
+          larger.getDistance(smaller)
+        );
+        if (
+          separation > Number.MAX_SAFE_INTEGER ||
+          separation < Number.MIN_SAFE_INTEGER
+        )
+          return;
+        const largerSepVelocity = (separation / larger.mass) * 0.25;
+        const smallerSepVelocity = (separation / smaller.mass) * 0.25;
+        const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
+        smaller.velX += Math.cos(angle) * smallerSepVelocity;
+        larger.velX += Math.cos(angle + Math.PI) * largerSepVelocity;
+      } else if (larger instanceof Player && smaller instanceof Virus) {
+      } else if (larger instanceof Player && smaller instanceof Mass) {
+      } else if (larger instanceof Virus && smaller instanceof Mass) {
+      }
+    });
+
     for (const [uuid, user] of Object.entries(this.users)) {
       const players = Object.values(user.players);
 
@@ -345,16 +421,21 @@ class World {
         player.velX = player.velX * 0.9;
         player.velY = player.velY * 0.9;
 
+        const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
+        const cohesionStrength =
+          0.1 * Math.log10(0.8 * player.getDistance(user) + 1);
+
+        const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
+        const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
+
         player.x +=
-          (8 / (player.radius * 10) + 0.13) *
-            4 *
-            clamp(user.mouse.x, -0.25, 0.25) +
-          player.velX;
+          (8 / (player.radius * 10) + 0.13) * user.mouseVector.x +
+          player.velX +
+          cohereX;
         player.y +=
-          (8 / (player.radius * 10) + 0.13) *
-            4 *
-            clamp(user.mouse.y, -0.25, 0.25) +
-          player.velY;
+          (8 / (player.radius * 10) + 0.13) * user.mouseVector.y +
+          player.velY +
+          cohereY;
 
         player.x = clamp(player.x, 0, this.width);
         player.y = clamp(player.y, 0, this.height);
@@ -367,22 +448,6 @@ class World {
       user.x = clamp(user.x, 0, this.width);
       user.y = clamp(user.y, 0, this.height);
     }
-
-    const intersections = findCircleIntersections(Object.values(this.entities));
-    intersections.forEach(([larger, smaller]) => {
-      if (larger instanceof Player && smaller instanceof Food) {
-        if (!larger.encloses(smaller)) return;
-        larger.mass++;
-        delete this.entities[smaller.uuid.UUID];
-        delete this.food[smaller.uuid.UUID];
-      } else if (larger instanceof Player && smaller instanceof Player) {
-      } else if (larger instanceof Player && smaller instanceof Virus) {
-      } else if (larger instanceof Player && smaller instanceof Mass) {
-      } else if (larger instanceof Virus && smaller instanceof Mass) {
-      }
-    });
-
-    // TODO: Add cohesion force, moving Players towards User
 
     if (Object.keys(this.food).length < this.minFood) {
       this.addEntities(

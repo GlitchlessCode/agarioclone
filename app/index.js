@@ -7,7 +7,7 @@ const { World, Entities, uuid, clamp, getType } = require("./agarServer");
 const app = express();
 const clients = {};
 
-const world = new World(100n, 60n, 100);
+const world = new World(200n, 200n, 100);
 
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
@@ -231,11 +231,18 @@ function colour(hex) {
   return result;
 }
 
+let count = 0;
 /**
  * @param {0|1|2|3} depth
  */
 async function gameTick(depth) {
   if (wsServer.clients.size !== 0) {
+    count++; // ! TEMPORARY
+    if (count == 200) {
+      const { players } = Object.values(world.users)[0];
+      world.addEntities(Object.values(players)[0].split({ x: 5, y: 0 })); // ! TEMPORARY
+    } // ! TEMPORARY
+
     // Update World
     world.update();
     if (depth == 0) {
