@@ -86,8 +86,8 @@ function findCircleIntersections(circles) {
   return intersections;
 }
 
-function getForce(G, m, M, r) {
-  return (G * m * M) / r ** 2;
+function getForce(percent) {
+  return -Math.min(0.25, Math.max(0.005, 0.25 * Math.log10(8 * percent)));
 }
 
 class Entity {
@@ -403,6 +403,7 @@ class World {
   }
 
   update() {
+    // TODO: Add DeltaTime
     const intersections = findCircleIntersections(Object.values(this.entities));
     intersections.forEach(([larger, smaller]) => {
       if (larger instanceof Player && smaller instanceof Food) {
@@ -413,22 +414,19 @@ class World {
         this.killed.push(smaller.uuid);
       } else if (larger instanceof Player && smaller instanceof Player) {
         // TODO: Add Eating & Merge Timer
-        const separation = getForce(
-          -0.01,
-          larger.mass,
-          smaller.mass,
-          larger.getDistance(smaller)
-        );
-        if (
-          separation > Number.MAX_SAFE_INTEGER ||
-          separation < Number.MIN_SAFE_INTEGER
-        )
-          return;
-        const largerSepVelocity = (separation / larger.mass) * 0.25;
-        const smallerSepVelocity = (separation / smaller.mass) * 0.25;
-        const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-        smaller.velX += Math.cos(angle) * smallerSepVelocity;
-        larger.velX += Math.cos(angle + Math.PI) * largerSepVelocity;
+        if (larger.userID == smaller.userID) {
+          const separation = getForce(
+            1 - larger.getDistance(smaller) / (larger.radius + smaller.radius)
+          );
+          if (
+            separation > Number.MAX_SAFE_INTEGER ||
+            separation < Number.MIN_SAFE_INTEGER
+          )
+            return;
+          const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
+          smaller.velX += Math.cos(angle) * separation;
+          larger.velX += Math.cos(angle + Math.PI) * separation;
+        }
       } else if (larger instanceof Player && smaller instanceof Virus) {
       } else if (larger instanceof Player && smaller instanceof Mass) {
       } else if (larger instanceof Virus && smaller instanceof Mass) {
@@ -443,8 +441,7 @@ class World {
         player.velY = player.velY * 0.9;
 
         const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
-        const cohesionStrength =
-          0.1 * Math.log10(0.8 * player.getDistance(user) + 1);
+        const cohesionStrength = 0.001 * player.getDistance(user) ** 3;
 
         const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
         const cohereY = Math.sin(cohesionAngle) * cohesionStrength;

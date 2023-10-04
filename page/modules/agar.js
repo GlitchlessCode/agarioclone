@@ -185,7 +185,6 @@ class World {
         else this.#entities[element.uuid] = element;
       }
     );
-    console.log(Object.keys(this.#entities).length);
   }
 
   draw() {
@@ -280,6 +279,8 @@ class Camera {
   world;
   /** @type {number} */
   camScale;
+  /** @type {number} */
+  loadingProgress;
   /**
    * @param {number} x
    * @param {number} y
@@ -291,13 +292,13 @@ class Camera {
     this.ctx = context;
     this.cnv = context.canvas;
     this.camScale = 1;
+    this.loadingProgress = 0;
   }
   /**
    * @param {World} world
    */
   changeWorld(world) {
-    if (!(world instanceof World))
-      throw new TypeError("world must be of type World");
+    if (!(world instanceof World)) this.world = undefined;
     this.world = world;
   }
 
@@ -373,15 +374,31 @@ class Camera {
 
         this.ctx.fillStyle = "#eeeeee";
         this.ctx.strokeStyle = "#111111";
+        this.ctx.lineWidth = (r * scale) / 34;
         this.ctx.textAlign = "center";
         this.ctx.textBaseline = "middle";
-        this.ctx.font = (r * scale) / 2 + `px sans-serif`;
+        this.ctx.font = `bold ${(r * scale) / 2.7}px sans-serif`;
         this.ctx.fillText(
           n,
           this.cnv.width / 2 - this.x * scale + x * scale,
           this.cnv.height / 2 - this.y * scale + y * scale
         );
+        this.ctx.strokeText(
+          n,
+          this.cnv.width / 2 - this.x * scale + x * scale,
+          this.cnv.height / 2 - this.y * scale + y * scale
+        );
       });
+    } else {
+      this.ctx.fillStyle = "#eeeeee";
+      this.ctx.strokeStyle = "#111111";
+      this.ctx.font = `bold ${this.cnv.height / 32}px sans-serif`;
+      this.ctx.lineWidth = this.cnv.height / 402;
+      this.ctx.textAlign = "center";
+      this.ctx.textBaseline = "middle";
+      const result = "%" + this.loadingProgress;
+      this.ctx.fillText(result, this.cnv.width / 2, this.cnv.height / 2);
+      this.ctx.strokeText(result, this.cnv.width / 2, this.cnv.height / 2);
     }
   }
 

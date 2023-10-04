@@ -44,6 +44,9 @@ let world;
 // TextDecoder
 const utf8 = new TextDecoder("utf-8");
 
+// Time average
+let average = 100;
+
 // * Event Listeners
 window.addEventListener("resize", setCanvasScale);
 
@@ -95,6 +98,7 @@ async function createMessage(status, ...data) {
   ]).arrayBuffer();
 }
 
+let prevTime = 0;
 /**
  * @this {WebSocket}
  * @param {{data:Blob}} param0
@@ -104,10 +108,12 @@ async function parseMessage({ data }) {
   const dataView = new DataView((await data.arrayBuffer()).slice(1));
   switch (new Uint8Array(await data.arrayBuffer())[0]) {
     case 8:
+      average += Date.now() - prevTime;
+      average /= 2;
       if (interpolator) clearTimeout(interpolator);
       interpolator = setTimeout(
         interpolatedCam,
-        12,
+        average / 10,
         camera.x,
         camera.y,
         camera.camScale,
@@ -117,6 +123,7 @@ async function parseMessage({ data }) {
         9
       );
       world.update(...getEntities(dataView));
+      prevTime = Date.now();
       break;
     case 0:
       console.log("init");
@@ -140,9 +147,10 @@ async function parseMessage({ data }) {
       this.send(await createMessage(1));
       break;
     case 5:
-      console.log("incomingEntity");
       this.progress++;
-      console.log(this.progress / this.worldSize);
+      camera.loadingProgress = Math.floor(
+        100 * (this.progress / this.worldSize)
+      );
       let params = [
         dataView.getFloat64(1),
         dataView.getFloat64(9),
@@ -177,6 +185,7 @@ async function parseMessage({ data }) {
       console.log("worldFinished");
       camera.changeWorld(world);
       this.send(await createMessage(7));
+      prevTime = Date.now();
       setTimeout(mouseTick.bind(this), 100);
       break;
     case 255:
@@ -211,7 +220,7 @@ function interpolatedCam(
   if (depth > 0)
     interpolator = setTimeout(
       interpolatedCam,
-      120 / divide,
+      average / divide,
       startX,
       startY,
       startScale,

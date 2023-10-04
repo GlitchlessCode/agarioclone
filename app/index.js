@@ -259,28 +259,28 @@ function colour(hex) {
 let count = 0;
 /**
  * @param {0|1|2|3} depth
+ * @param {Array} tickData
  */
-async function gameTick(depth) {
-  console.log(Object.keys(world.entities).length);
+async function gameTick(depth, tickData) {
   if (wsServer.clients.size !== 0) {
     count++; // ! TEMPORARY
     if (count == 200) {
       const { players } = Object.values(world.users)[0];
-      world.addEntities(Object.values(players)[0].split({ x: 5, y: 0 })); // ! TEMPORARY
+      world.addEntities(Object.values(players)[0].split({ x: 1, y: 0 })); // ! TEMPORARY
     } // ! TEMPORARY
 
     // Update World
     world.update();
+    // Make Tick data
+    tickData.push(...(await Promise.all(createData())));
     if (depth == 0) {
-      // Make Tick data
-      const tickData = await Promise.all(createData());
       // Send Ticks
       await Promise.all(sendTick(tickData, world.killed));
       world.killed = [];
     }
     world.reset();
   }
-  setTimeout(gameTick, 30, (depth + 1) % 4);
+  setTimeout(gameTick, 25, (depth + 1) % 4, depth == 0 ? [] : tickData);
 }
 
-setTimeout(gameTick, 30, 0);
+setTimeout(gameTick, 25, 0);
