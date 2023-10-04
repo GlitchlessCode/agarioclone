@@ -91,12 +91,14 @@ function getForce(G, m, M, r) {
 }
 
 class Entity {
+  /** @type {boolean} */
+  different;
   /** @type {number} */
   x;
   /** @type {number} */
   y;
   /** @type {{UUID: string, buff: ArrayBuffer}} */
-  #uuid;
+  _uuid;
   /**
    * @param {number} x
    * @param {number} y
@@ -104,14 +106,20 @@ class Entity {
    * @param {string} [UUID]
    */
   constructor(x, y, UUID) {
-    this.#uuid = UUID ? UUID : uuid();
+    this._uuid = UUID ? UUID : uuid();
     this.x = x;
     this.y = y;
     this.different = true;
+    return new Proxy(this, {
+      set(target, prop, value) {
+        Reflect.set(target, "different", true);
+        return Reflect.set(...arguments);
+      },
+    });
   }
 
   get uuid() {
-    return this.#uuid;
+    return this._uuid;
   }
 
   /**
@@ -159,9 +167,9 @@ class Circle extends Entity {
   }
 }
 
-class _Player extends Circle {
+class Player extends Circle {
   /** @type {string} */
-  #userID;
+  _userID;
   /** @type {Object.<string, Player>} */
   siblings;
   /** @type {number} */
@@ -178,14 +186,14 @@ class _Player extends Circle {
    */
   constructor(x, y, userID) {
     super(x, y, "#00000000", 25);
-    this.#userID = userID;
+    this._userID = userID;
     this.velX = 0;
     this.velY = 0;
     this.mergeTimer = 0;
   }
 
   get userID() {
-    return this.#userID;
+    return this._userID;
   }
 
   /**
@@ -205,7 +213,7 @@ class _Player extends Circle {
   }
 }
 
-class _Food extends Circle {
+class Food extends Circle {
   /**
    * @param {number} x
    * @param {number} y
@@ -215,7 +223,7 @@ class _Food extends Circle {
   }
 }
 
-class _Virus extends Circle {
+class Virus extends Circle {
   /**
    * @param {number} x
    * @param {number} y
@@ -225,7 +233,7 @@ class _Virus extends Circle {
   }
 }
 
-class _Mass extends Circle {
+class Mass extends Circle {
   /**
    * @param {number} x
    * @param {number} y
@@ -236,15 +244,17 @@ class _Mass extends Circle {
   }
 }
 
-class _User extends Entity {
+class User extends Entity {
   /** @type {{x: number, y:number}} */
   mouse;
   /** @type {Object.<string, Player>} */
   players;
   /** @type {World} */
   world;
-  /** @type {numer} */
+  /** @type {number} */
   scale;
+  /** @type {{NAME: string, buff: ArrayBuffer}} */
+  name;
   /**
    * @param {number} x
    * @param {number} y
@@ -273,12 +283,15 @@ class _User extends Entity {
       }
     );
     this.world = world;
+    const name = stringToColour(this.uuid.UUID); // ! TEMPORARY
+    this.name = { NAME: name, buff: new TextEncoder().encode(name).buffer };
   }
 
   kill() {
     for (const [uuid, player] of Object.entries(this.players)) {
       delete this.world.entities[uuid];
       delete this.world.players[uuid];
+      this.world.killed.push(player.uuid);
     }
     delete this.world.users[this.uuid.UUID];
   }
@@ -322,8 +335,6 @@ class _User extends Entity {
 class World {
   /** @type {Object.<string, Circle>} */
   entities;
-  /** @type {Object.<string, string>} */
-  entitieHashes;
   /** @type {Object.<string, Player>} */
   players;
   /** @type {Object.<string, Virus>} */
@@ -340,6 +351,8 @@ class World {
   #height;
   /** @type {number} */
   minFood;
+  /** @type {{UUID: string, buff: ArrayBuffer}[]} */
+  killed;
 
   /**
    * @param {bigint} width
@@ -348,7 +361,6 @@ class World {
    */
   constructor(width, height, minFood, ...entities) {
     this.entities = {};
-    this.entitieHashes = {};
     this.players = {};
     this.viruses = {};
     this.food = {};
@@ -358,6 +370,7 @@ class World {
     this.#width = width;
     this.#height = height;
     this.minFood = minFood;
+    this.killed = [];
   }
 
   /**
@@ -397,6 +410,7 @@ class World {
         larger.mass++;
         delete this.entities[smaller.uuid.UUID];
         delete this.food[smaller.uuid.UUID];
+        this.killed.push(smaller.uuid);
       } else if (larger instanceof Player && smaller instanceof Player) {
         // TODO: Add Eating & Merge Timer
         const separation = getForce(
@@ -477,6 +491,12 @@ class World {
         )
       );
     }
+  }
+
+  reset() {
+    Object.values(this.entities)
+      .filter((a) => a.different)
+      .forEach((circle) => (circle.different = false));
   }
 
   get width() {

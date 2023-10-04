@@ -41,6 +41,9 @@ const camera = new Camera(0, 0, ctx);
 /** @type {World} */
 let world;
 
+// TextDecoder
+const utf8 = new TextDecoder("utf-8");
+
 // * Event Listeners
 window.addEventListener("resize", setCanvasScale);
 
@@ -104,16 +107,16 @@ async function parseMessage({ data }) {
       if (interpolator) clearTimeout(interpolator);
       interpolator = setTimeout(
         interpolatedCam,
-        10,
+        12,
         camera.x,
         camera.y,
         camera.camScale,
-        dataView.getFloat64(4),
-        dataView.getFloat64(12),
-        dataView.getFloat32(20),
+        dataView.getFloat64(8),
+        dataView.getFloat64(16),
+        dataView.getFloat32(24),
         9
       );
-      world.update(getEntities(dataView));
+      world.update(...getEntities(dataView));
       break;
     case 0:
       console.log("init");
@@ -149,7 +152,8 @@ async function parseMessage({ data }) {
           dataView.getUint8(22),
           dataView.getUint8(23)
         ),
-        uuid(dataView.buffer.slice(-32)),
+        utf8.decode(dataView.buffer.slice(25, 25 + dataView.getUint8(24))),
+        uuid(dataView.buffer.slice(25 + dataView.getUint8(24))),
       ];
       switch (dataView.getUint8(0)) {
         case 0:
@@ -207,7 +211,7 @@ function interpolatedCam(
   if (depth > 0)
     interpolator = setTimeout(
       interpolatedCam,
-      100 / divide,
+      120 / divide,
       startX,
       startY,
       startScale,
@@ -260,18 +264,20 @@ function colour(...values) {
  * @property {string} colour
  * @property {string} uuid
  */
-
+const BUFFERSIZE = 57;
 /**
- * @param {ArrayBuffer} dataSet
+ * @param {DataView} dataSet
  * @returns {PseudoEntity}
  */
 function getEntities(dataSet) {
   const entities = [];
   let nameOffset = 0;
+
   for (let i = 0; i < dataSet.getUint32(0); i++) {
     const entityView = new DataView(
-      dataSet.buffer.slice(24 + nameOffset + i * 56)
+      dataSet.buffer.slice(28 + nameOffset + i * BUFFERSIZE)
     );
+    nameOffset += entityView.getUint8(24);
     entities.push({
       type: entityView.getUint8(0),
       x: entityView.getFloat64(1),
@@ -282,10 +288,24 @@ function getEntities(dataSet) {
         entityView.getUint8(22),
         entityView.getUint8(23)
       ),
-      uuid: uuid(entityView.buffer.slice(24)),
+      name: utf8.decode(
+        entityView.buffer.slice(25, 25 + entityView.getUint8(24))
+      ),
+      uuid: uuid(entityView.buffer.slice(25 + entityView.getUint8(24))),
     });
   }
-  return entities;
+  const killed = [];
+  for (let i = 0; i < dataSet.getUint32(4); i++) {
+    killed.push(
+      uuid(
+        dataSet.buffer.slice(
+          28 + nameOffset + dataSet.getUint32(0) * BUFFERSIZE + i * 32,
+          60 + nameOffset + dataSet.getUint32(0) * BUFFERSIZE + i * 32
+        )
+      )
+    );
+  }
+  return [entities, killed];
 }
 
 // When window is loaded

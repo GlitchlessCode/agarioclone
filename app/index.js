@@ -7,7 +7,8 @@ const { World, Entities, uuid, clamp, getType } = require("./agarServer");
 const app = express();
 const clients = {};
 
-const world = new World(200n, 200n, 100);
+const world = new World(200n, 200n, 1000);
+world.update();
 
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
@@ -141,22 +142,27 @@ async function fetchWorld() {
   this.queue.push(await createMessage(4, getUser.bind(this)()));
 
   for (const [uuid, entity] of Object.entries(world.entities)) {
-    const infoView = new DataView(new ArrayBuffer(23));
+    const infoView = new DataView(new ArrayBuffer(24));
     const colourValue = colour(entity.colour);
-    this.queue.push(
-      await createMessage(
-        5,
-        new Uint8Array([getType(entity)]),
-        (infoView.setFloat64(0, entity.x),
-        infoView.setFloat64(8, entity.y),
-        infoView.setFloat32(16, entity.radius),
-        infoView.setUint8(20, colourValue[0]),
-        infoView.setUint8(21, colourValue[1]),
-        infoView.setUint8(22, colourValue[2]),
-        infoView.buffer),
-        entity.uuid.buff
-      )
-    );
+
+    let params = [new Uint8Array([getType(entity)]), infoView.buffer];
+    infoView.setFloat64(0, entity.x);
+    infoView.setFloat64(8, entity.y);
+    infoView.setFloat32(16, entity.radius);
+    infoView.setUint8(20, colourValue[0]);
+    infoView.setUint8(21, colourValue[1]);
+    infoView.setUint8(22, colourValue[2]);
+
+    if (entity instanceof Entities.Player) {
+      const user = world.users[entity.userID];
+      const nameLength = user.name.buff.byteLength;
+      infoView.setUint8(23, nameLength);
+      params.push(user.name.buff);
+    }
+
+    params.push(entity.uuid.buff);
+
+    this.queue.push(await createMessage(5, ...params));
   }
 
   this.queue.push(await createMessage(6));
@@ -177,22 +183,22 @@ function getUser() {
 
 /**
  * @param {Array} tickData
+ * @param {{UUID: string, buff: ArrayBuffer}[]} killed
  */
-function* sendTick(tickData) {
+function* sendTick(tickData, killed) {
   for (const ws of wsServer.clients) {
     yield new Promise(async function (resolve, reject) {
       if (ws.gameStatus.tickReady) {
-        const infoView = new DataView(new ArrayBuffer(4));
+        const infoView = new DataView(new ArrayBuffer(8));
         ws.send(
           await createMessage(
             8,
-            (infoView.setUint32(
-              0,
-              new Uint8Array([Object.keys(world.entities).length])
-            ),
+            (infoView.setUint32(0, tickData.length),
+            infoView.setUint32(4, killed.length),
             infoView),
             getUser.bind(ws)(),
-            ...tickData
+            ...tickData,
+            ...killed.map((uuid) => uuid.buff)
           )
         );
       }
@@ -202,27 +208,38 @@ function* sendTick(tickData) {
 }
 
 function* createData() {
-  for (const [uuid, entity] of Object.entries(world.entities)) {
-    yield new Promise(async function (resolve, reject) {
-      try {
-        const infoView = new DataView(new ArrayBuffer(23));
-        const colourValue = colour(entity.colour);
-        const data = await new Blob([
-          new Uint8Array([getType(entity)]),
-          (infoView.setFloat64(0, entity.x),
-          infoView.setFloat64(8, entity.y),
-          infoView.setFloat32(16, entity.radius),
-          infoView.setUint8(20, colourValue[0]),
-          infoView.setUint8(21, colourValue[1]),
-          infoView.setUint8(22, colourValue[2]),
-          infoView.buffer),
-          entity.uuid.buff,
-        ]).arrayBuffer();
-        resolve(data);
-      } catch (error) {
-        resolve(await new Blob([new Uint8Array([])]).arrayBuffer());
-      }
-    });
+  for (const [uuid, entity] of Object.entries(world.entities).filter(
+    (a) => a[1].different
+  )) {
+    if (entity.different)
+      yield new Promise(async function (resolve, reject) {
+        try {
+          const infoView = new DataView(new ArrayBuffer(24));
+          const colourValue = colour(entity.colour);
+
+          let params = [new Uint8Array([getType(entity)]), infoView.buffer];
+          infoView.setFloat64(0, entity.x);
+          infoView.setFloat64(8, entity.y);
+          infoView.setFloat32(16, entity.radius);
+          infoView.setUint8(20, colourValue[0]);
+          infoView.setUint8(21, colourValue[1]);
+          infoView.setUint8(22, colourValue[2]);
+
+          if (entity instanceof Entities.Player) {
+            const user = world.users[entity.userID];
+            const nameLength = user.name.buff.byteLength;
+            infoView.setUint8(23, nameLength);
+            params.push(user.name.buff);
+          }
+
+          params.push(entity.uuid.buff);
+
+          const data = await new Blob(params).arrayBuffer();
+          resolve(data);
+        } catch (error) {
+          resolve(await new Blob([new Uint8Array([])]).arrayBuffer());
+        }
+      });
   }
 }
 
@@ -244,6 +261,7 @@ let count = 0;
  * @param {0|1|2|3} depth
  */
 async function gameTick(depth) {
+  console.log(Object.keys(world.entities).length);
   if (wsServer.clients.size !== 0) {
     count++; // ! TEMPORARY
     if (count == 200) {
@@ -257,10 +275,12 @@ async function gameTick(depth) {
       // Make Tick data
       const tickData = await Promise.all(createData());
       // Send Ticks
-      await Promise.all(sendTick(tickData));
+      await Promise.all(sendTick(tickData, world.killed));
+      world.killed = [];
     }
+    world.reset();
   }
-  setTimeout(gameTick, 25, (depth + 1) % 4);
+  setTimeout(gameTick, 30, (depth + 1) % 4);
 }
 
-setTimeout(gameTick, 25, 0);
+setTimeout(gameTick, 30, 0);

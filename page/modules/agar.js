@@ -25,15 +25,18 @@ class Entity {
   #uuid;
   /** @type {string} */
   #colour;
+  /** @type {string} */
+  #name;
   /**
    * @param {number} x
    * @param {number} y
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, colour, uuid) {
+  constructor(x, y, radius, colour, name, uuid) {
     this.#uuid = uuid;
     this.#colour = colour;
+    this.#name = name;
     this.#trueX = x;
     this.#trueY = y;
     this.#prevX = x;
@@ -51,6 +54,10 @@ class Entity {
 
   get colour() {
     return this.#colour;
+  }
+
+  get name() {
+    return this.#name;
   }
 
   get radius() {
@@ -93,6 +100,7 @@ class Entity {
       y: this.y,
       r: this.radius,
       c: this.colour,
+      n: this.name,
     };
   }
 }
@@ -104,8 +112,8 @@ class Player extends Entity {
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, colour, uuid) {
-    super(x, y, radius, colour, uuid);
+  constructor(x, y, radius, colour, name, uuid) {
+    super(x, y, radius, colour, name, uuid);
   }
 }
 
@@ -116,8 +124,8 @@ class Food extends Entity {
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, colour, uuid) {
-    super(x, y, radius, colour, uuid);
+  constructor(x, y, radius, colour, name, uuid) {
+    super(x, y, radius, colour, name, uuid);
   }
 }
 
@@ -128,8 +136,8 @@ class Virus extends Entity {
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, colour, uuid) {
-    super(x, y, radius, colour, uuid);
+  constructor(x, y, radius, colour, name, uuid) {
+    super(x, y, radius, colour, name, uuid);
   }
 }
 
@@ -140,8 +148,8 @@ class Mass extends Entity {
    * @param {number} radius
    * @param {string} uuid
    */
-  constructor(x, y, radius, colour, uuid) {
-    super(x, y, radius, colour, uuid);
+  constructor(x, y, radius, colour, name, uuid) {
+    super(x, y, radius, colour, name, uuid);
   }
 }
 
@@ -177,10 +185,11 @@ class World {
         else this.#entities[element.uuid] = element;
       }
     );
+    console.log(Object.keys(this.#entities).length);
   }
 
   draw() {
-    /** @type {Array.<{x:number, y:number, r:number, c:string}>}*/
+    /** @type {Array.<{x:number, y:number, r:number, c:string, n:string}>}*/
     const result = new Array();
     for (const [key, entity] of Object.entries(this.#entities)) {
       if (entity instanceof Entity) result.push(entity.draw());
@@ -196,18 +205,18 @@ class World {
    * @property {number} radius
    * @property {string} colour
    * @property {string} uuid
+   * @property {string} name
    */
 
   /**
    * @param {Array.<PseudoEntity>} entityInfo
+   * @param {Array.<string>} killed
    */
-  update(entityInfo) {
+  update(entityInfo, killed) {
     if (entityInfo.length < Object.keys(this.#entities).length) {
-      const culled = Object.entries(this.#entities).filter(([uuid, entity]) => {
-        return !entityInfo.map(({ uuid }) => uuid).includes(uuid);
-      });
-      culled.forEach(([key, entity]) => delete this.#entities[key]);
+      killed.forEach((uuid) => delete this.#entities[uuid]);
     }
+
     const entities = [];
     for (const pseudoEntity of entityInfo) {
       if (Object.hasOwn(this.#entities, pseudoEntity.uuid)) {
@@ -221,6 +230,7 @@ class World {
           pseudoEntity.y,
           pseudoEntity.radius,
           pseudoEntity.colour,
+          pseudoEntity.name,
           pseudoEntity.uuid,
         ];
         switch (pseudoEntity.type) {
@@ -349,7 +359,7 @@ class Camera {
       drawArray.sort((a, b) => {
         return a.r - b.r;
       });
-      drawArray.forEach(({ x, y, r, c }) => {
+      drawArray.forEach(({ x, y, r, c, n }) => {
         this.ctx.fillStyle = c;
         this.ctx.beginPath();
         this.ctx.arc(
@@ -360,6 +370,17 @@ class Camera {
           Math.PI * 2
         );
         this.ctx.fill();
+
+        this.ctx.fillStyle = "#eeeeee";
+        this.ctx.strokeStyle = "#111111";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.font = (r * scale) / 2 + `px sans-serif`;
+        this.ctx.fillText(
+          n,
+          this.cnv.width / 2 - this.x * scale + x * scale,
+          this.cnv.height / 2 - this.y * scale + y * scale
+        );
       });
     }
   }
