@@ -187,6 +187,14 @@ async function parseMessage({ data }) {
       this.send(await createMessage(7));
       prevTime = Date.now();
       setTimeout(mouseTick.bind(this), 100);
+      const ws = this;
+      document.addEventListener("keydown", async function ({ code }) {
+        if (ws.readyState !== 1) return;
+        if (code == "Space")
+          ws.send(await createMessage(10, new Uint8Array([0])));
+        if (code == "KeyW")
+          ws.send(await createMessage(10, new Uint8Array([1])));
+      });
       break;
     case 255:
       throw new Error("server error");

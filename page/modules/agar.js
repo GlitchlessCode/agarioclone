@@ -396,7 +396,7 @@ class Camera {
       this.ctx.lineWidth = this.cnv.height / 402;
       this.ctx.textAlign = "center";
       this.ctx.textBaseline = "middle";
-      const result = "%" + this.loadingProgress;
+      const result = this.loadingProgress + "%";
       this.ctx.fillText(result, this.cnv.width / 2, this.cnv.height / 2);
       this.ctx.strokeText(result, this.cnv.width / 2, this.cnv.height / 2);
     }

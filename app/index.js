@@ -7,7 +7,7 @@ const { World, Entities, uuid, clamp, getType } = require("./agarServer");
 const app = express();
 const clients = {};
 
-const world = new World(200n, 200n, 1000);
+const world = new World(200n, 200n, 1000, new Entities.Virus(100, 100));
 world.update();
 
 // Websocket Server
@@ -16,7 +16,8 @@ wsServer.on("connection", async function (ws, req) {
   const UUID = uuid();
   ws.id = UUID;
   ws.queue = [];
-  ws.timestamps = [];
+  ws.mouseTimestamps = [];
+  ws.keyTimestamps = [];
   ws.gameStatus = {
     init: false,
     tickReady: false,
@@ -94,18 +95,31 @@ async function parseMessage(data, isBinary) {
         break;
       case 9:
         // Rate Limiting
-        this.timestamps.push(Date.now());
-        if (this.timestamps.length > 16) {
-          const length = this.timestamps.length;
+        this.mouseTimestamps.push(Date.now());
+        if (this.mouseTimestamps.length > 16) {
+          const length = this.mouseTimestamps.length;
           for (let i = 0; i < length - 16; i++) {
-            this.timestamps.shift();
+            this.mouseTimestamps.shift();
           }
-          if (this.timestamps[15] - this.timestamps[0] < 1000)
+          if (this.mouseTimestamps[15] - this.mouseTimestamps[0] < 1000)
             throw new Error("Rate Limit");
         }
         const user = world.users[this.id.UUID];
         user.mouse.x = clamp(dataView.getFloat64(0), -1, 1);
         user.mouse.y = clamp(dataView.getFloat64(8), -1, 1);
+        break;
+      case 10:
+        // Rate Limiting
+        this.keyTimestamps.push(Date.now());
+        if (this.keyTimestamps.length > 16) {
+          const length = this.keyTimestamps.length;
+          for (let i = 0; i < length - 16; i++) {
+            this.keyTimestamps.shift();
+          }
+          if (this.keyTimestamps[15] - this.keyTimestamps[0] < 1000)
+            throw new Error("Rate Limit");
+        }
+        handleKey.bind(this, dataView.getInt8(0))();
         break;
     }
   } catch (error) {
@@ -179,6 +193,30 @@ function getUser() {
     posView.setFloat32(16, world.users[this.id.UUID].scale),
     posView.buffer
   );
+}
+
+/**
+ * @this Websocket
+ * @param {0|1} keypress
+ */
+function handleKey(keypress) {
+  const user = world.users[this.id.UUID];
+  switch (keypress) {
+    case 0:
+      if (Object.values(user.players).length >= 16) break;
+      for (const player of Object.values(user.players)) {
+        if (player.mass > 34 && Object.values(user.players).length < 16) {
+          const { x, y } = user.mouseVector;
+          const mult = player.radius / 1.5;
+          world.addEntities(player.split({ x: x * mult, y: y * mult }));
+        }
+      }
+      break;
+    case 1:
+      break;
+    default:
+      throw new Error("Invalid keypress");
+  }
 }
 
 /**
@@ -256,21 +294,14 @@ function colour(hex) {
   return result;
 }
 
-let count = 0;
 /**
  * @param {0|1|2|3} depth
  * @param {Array} tickData
  */
-async function gameTick(depth, tickData) {
+async function gameTick(depth, tickData, prevTime) {
   if (wsServer.clients.size !== 0) {
-    count++; // ! TEMPORARY
-    if (count == 200) {
-      const { players } = Object.values(world.users)[0];
-      world.addEntities(Object.values(players)[0].split({ x: 1, y: 0 })); // ! TEMPORARY
-    } // ! TEMPORARY
-
     // Update World
-    world.update();
+    world.update((Date.now() - prevTime) / 25);
     // Make Tick data
     tickData.push(...(await Promise.all(createData())));
     if (depth == 0) {
@@ -280,7 +311,13 @@ async function gameTick(depth, tickData) {
     }
     world.reset();
   }
-  setTimeout(gameTick, 25, (depth + 1) % 4, depth == 0 ? [] : tickData);
+  setTimeout(
+    gameTick,
+    25,
+    (depth + 1) % 4,
+    depth == 0 ? [] : tickData,
+    Date.now()
+  );
 }
 
-setTimeout(gameTick, 25, 0);
+setTimeout(gameTick, 25, 0, [], Date.now());

@@ -86,8 +86,11 @@ function findCircleIntersections(circles) {
   return intersections;
 }
 
-function getForce(percent) {
-  return -Math.min(0.25, Math.max(0.005, 0.25 * Math.log10(8 * percent)));
+function getForce(percent, radius) {
+  return -Math.min(
+    0.1 * radius,
+    Math.max(0.005, 0.1 * radius * Math.log10(8 * percent))
+  );
 }
 
 class Entity {
@@ -127,6 +130,13 @@ class Entity {
    */
   getDistance(entity) {
     return Math.hypot(this.x - entity.x, this.y - entity.y);
+  }
+
+  /**
+   * @param {Entity} entity
+   */
+  getAngle(entity) {
+    return Math.atan2(entity.y - this.y, entity.x - this.x);
   }
 }
 
@@ -229,7 +239,7 @@ class Virus extends Circle {
    * @param {number} y
    */
   constructor(x, y) {
-    super(x, y, "#77ff77", 118);
+    super(x, y, "#22ff22", 100);
   }
 }
 
@@ -402,8 +412,10 @@ class World {
     );
   }
 
-  update() {
-    // TODO: Add DeltaTime
+  /**
+   * @param {number} DeltaTime
+   */
+  update(DeltaTime) {
     const intersections = findCircleIntersections(Object.values(this.entities));
     intersections.forEach(([larger, smaller]) => {
       if (larger instanceof Player && smaller instanceof Food) {
@@ -416,7 +428,8 @@ class World {
         // TODO: Add Eating & Merge Timer
         if (larger.userID == smaller.userID) {
           const separation = getForce(
-            1 - larger.getDistance(smaller) / (larger.radius + smaller.radius)
+            1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
+            larger.radius
           );
           if (
             separation > Number.MAX_SAFE_INTEGER ||
@@ -424,8 +437,10 @@ class World {
           )
             return;
           const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-          smaller.velX += Math.cos(angle) * separation;
-          larger.velX += Math.cos(angle + Math.PI) * separation;
+          smaller.velX += Math.cos(angle) * separation * DeltaTime;
+          smaller.velY += Math.sin(angle) * separation * DeltaTime;
+          larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
+          larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
         }
       } else if (larger instanceof Player && smaller instanceof Virus) {
       } else if (larger instanceof Player && smaller instanceof Mass) {
@@ -437,21 +452,23 @@ class World {
       const players = Object.values(user.players);
 
       players.forEach((player) => {
-        player.velX = player.velX * 0.9;
-        player.velY = player.velY * 0.9;
+        player.velX = player.velX * 0.9 ** DeltaTime;
+        player.velY = player.velY * 0.9 ** DeltaTime;
 
         const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
-        const cohesionStrength = 0.001 * player.getDistance(user) ** 3;
+        const cohesionStrength =
+          0.01 *
+          player.getDistance(user) ** (0.1 * player.getDistance(user) + 0.5);
 
         const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
         const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
 
         player.x +=
-          (8 / (player.radius * 10) + 0.13) * user.mouseVector.x +
+          (8 / (player.radius * 10) + 0.13) * user.mouseVector.x * DeltaTime +
           player.velX +
           cohereX;
         player.y +=
-          (8 / (player.radius * 10) + 0.13) * user.mouseVector.y +
+          (8 / (player.radius * 10) + 0.13) * user.mouseVector.y * DeltaTime +
           player.velY +
           cohereY;
 
