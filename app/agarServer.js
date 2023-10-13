@@ -157,7 +157,7 @@ class Circle extends Entity {
   }
 
   /**
-   * @param {Entity} entity
+   * @param {Circle} entity
    * @returns {boolean}
    */
   intersecting(entity) {
@@ -165,11 +165,38 @@ class Circle extends Entity {
   }
 
   /**
-   * @param {Entity} entity
+   * @param {Circle} entity
    * @returns {boolean}
    */
   encloses(entity) {
     return this.getDistance(entity) + entity.radius <= this.radius;
+  }
+
+  /**
+   * Credit to https://www.xarg.org/2016/07/calculate-the-intersection-area-of-two-circles/
+   * @param {Circle} entity
+   * @returns {number}
+   */
+  getOverlap(entity) {
+    const dist = this.getDistance(entity);
+
+    if (this.intersecting(entity)) {
+      const sqrRadA = this.radius ** 2;
+      const sqrRadB = entity.radius ** 2;
+
+      const x = (sqrRadA - sqrRadB + dist ** 2) / (2 * dist);
+      const z = x ** 2;
+      const y = Math.sqrt(sqrRadA - z);
+      if (dist <= Math.abs(entity.radius - this.radius)) {
+        return Math.PI * Math.min(sqrRadA, sqrRadB);
+      }
+      return (
+        sqrRadA * Math.asin(y / this.radius) +
+        sqrRadB * Math.asin(y / entity.radius) -
+        y * (x + Math.sqrt(z + sqrRadB - sqrRadA))
+      );
+    }
+    return 0;
   }
 
   get radius() {
@@ -211,7 +238,7 @@ class Player extends Circle {
    * @returns {Player}
    */
   split(vector) {
-    this.mass = Math.floor(this.mass / 2);
+    this.mass = this.mass / 2;
     this.velX -= vector.x / 6;
     this.velY -= vector.y / 6;
 
@@ -452,6 +479,8 @@ class World {
       const players = Object.values(user.players);
 
       players.forEach((player) => {
+        player.mass = Math.max(player.mass * 0.9998, 10);
+
         player.velX = player.velX * 0.9 ** DeltaTime;
         player.velY = player.velY * 0.9 ** DeltaTime;
 
