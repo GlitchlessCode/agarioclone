@@ -1,4 +1,4 @@
-FROM oven/bun
+FROM oven/bun:latest
 WORKDIR /renderwebsocket
 COPY . .
 RUN bun install
