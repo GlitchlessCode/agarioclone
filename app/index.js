@@ -10,6 +10,7 @@ const clients = {};
 const world = new World(200n, 200n, 1000, new Entities.Virus(100, 100));
 world.update();
 
+let first = true;
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
 wsServer.on("connection", async function (ws, req) {
@@ -39,6 +40,11 @@ wsServer.on("connection", async function (ws, req) {
   ws.on("message", parseMessage);
   console.log("Connection Established!");
   ws.send(await createMessage(0));
+
+  if (first) {
+    first = false;
+    Object.values(world.players)[0].mass += 350;
+  }
 });
 
 // Express Server

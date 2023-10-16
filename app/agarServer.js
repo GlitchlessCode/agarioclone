@@ -173,7 +173,7 @@ class Circle extends Entity {
   }
 
   /**
-   * Credit to https://www.xarg.org/2016/07/calculate-the-intersection-area-of-two-circles/
+   * Credit to https://www.geeksforgeeks.org/area-of-intersection-of-two-circles/
    * @param {Circle} entity
    * @returns {number}
    */
@@ -183,18 +183,19 @@ class Circle extends Entity {
     if (this.intersecting(entity)) {
       const sqrRadA = this.radius ** 2;
       const sqrRadB = entity.radius ** 2;
-
-      const x = (sqrRadA - sqrRadB + dist ** 2) / (2 * dist);
-      const z = x ** 2;
-      const y = Math.sqrt(sqrRadA - z);
       if (dist <= Math.abs(entity.radius - this.radius)) {
         return Math.PI * Math.min(sqrRadA, sqrRadB);
       }
-      return (
-        sqrRadA * Math.asin(y / this.radius) +
-        sqrRadB * Math.asin(y / entity.radius) -
-        y * (x + Math.sqrt(z + sqrRadB - sqrRadA))
-      );
+      const ALPHA =
+        Math.acos((sqrRadA + dist ** 2 - sqrRadB) / (2 * this.radius * dist)) *
+        2;
+      const BETA =
+        Math.acos(
+          (sqrRadB + dist ** 2 - sqrRadA) / (2 * entity.radius * dist)
+        ) * 2;
+      const a1 = 0.5 * BETA * sqrRadB - 0.5 * sqrRadB * Math.sin(BETA);
+      const a2 = 0.5 * ALPHA * sqrRadA - 0.5 * sqrRadA * Math.sin(ALPHA);
+      return a1 + a2;
     }
     return 0;
   }
@@ -444,36 +445,7 @@ class World {
    */
   update(DeltaTime) {
     const intersections = findCircleIntersections(Object.values(this.entities));
-    intersections.forEach(([larger, smaller]) => {
-      if (larger instanceof Player && smaller instanceof Food) {
-        if (!larger.encloses(smaller)) return;
-        larger.mass++;
-        delete this.entities[smaller.uuid.UUID];
-        delete this.food[smaller.uuid.UUID];
-        this.killed.push(smaller.uuid);
-      } else if (larger instanceof Player && smaller instanceof Player) {
-        // TODO: Add Eating & Merge Timer
-        if (larger.userID == smaller.userID) {
-          const separation = getForce(
-            1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
-            larger.radius
-          );
-          if (
-            separation > Number.MAX_SAFE_INTEGER ||
-            separation < Number.MIN_SAFE_INTEGER
-          )
-            return;
-          const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-          smaller.velX += Math.cos(angle) * separation * DeltaTime;
-          smaller.velY += Math.sin(angle) * separation * DeltaTime;
-          larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
-          larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
-        }
-      } else if (larger instanceof Player && smaller instanceof Virus) {
-      } else if (larger instanceof Player && smaller instanceof Mass) {
-      } else if (larger instanceof Virus && smaller instanceof Mass) {
-      }
-    });
+    intersections.forEach(this.collisionSim, this);
 
     for (const [uuid, user] of Object.entries(this.users)) {
       const players = Object.values(user.players);
@@ -533,6 +505,44 @@ class World {
             )
         )
       );
+    }
+  }
+
+  /**
+   * @param {[Circle, Circle]} param0
+   */
+  collisionSim([larger, smaller]) {
+    if (larger instanceof Player && smaller instanceof Food) {
+      if (!larger.encloses(smaller)) return;
+      larger.mass++;
+      delete this.entities[smaller.uuid.UUID];
+      delete this.food[smaller.uuid.UUID];
+      this.killed.push(smaller.uuid);
+    } else if (larger instanceof Player && smaller instanceof Player) {
+      // TODO: Add Eating & Merge Timer
+      if (larger.userID == smaller.userID) {
+        // * User is the same
+        const separation = getForce(
+          1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
+          larger.radius
+        );
+        if (
+          separation > Number.MAX_SAFE_INTEGER ||
+          separation < Number.MIN_SAFE_INTEGER
+        )
+          return;
+        const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
+        smaller.velX += Math.cos(angle) * separation * DeltaTime;
+        smaller.velY += Math.sin(angle) * separation * DeltaTime;
+        larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
+        larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
+      } else {
+        // * User is different
+        console.log(larger.getOverlap(smaller) / smaller.mass);
+      }
+    } else if (larger instanceof Player && smaller instanceof Virus) {
+    } else if (larger instanceof Player && smaller instanceof Mass) {
+    } else if (larger instanceof Virus && smaller instanceof Mass) {
     }
   }
 
