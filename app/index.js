@@ -1,14 +1,110 @@
 // Import Statements
 const express = require("express");
 const ws = require("ws");
+const { availableParallelism } = require("os");
 const path = require("path");
+const { Worker } = require("worker_threads");
 const { World, Entities, uuid, clamp, getType } = require("./agarServer");
 
 const app = express();
 const clients = {};
 
+class Deferred {
+  /** @type {function} */
+  resolve;
+  /** @type {function} */
+  reject;
+
+  /**@type {Promise} */
+  promise;
+  constructor() {
+    this.promise = new Promise((resolve, reject) => {
+      this.reject = reject;
+      this.resolve = resolve;
+    });
+  }
+}
+class Workers {
+  /** @type {{worker: Worker, ready: boolean}[]} */
+  static #workers;
+  /** @type {{worker: Worker, ready: boolean}[]} */
+  static #ready;
+  static {
+    this.#workers = Array.from(
+      { length: Math.ceil(availableParallelism / 2) },
+      () => {
+        return {
+          worker: new Worker(path.join(__dirname, "/agarWorker.js")),
+          ready: true,
+        };
+      }
+    );
+    this.#ready = [...this.#workers];
+  }
+
+  /**
+   * @typedef {Object} task
+   * @property {number} type
+   * @property {any} data
+   */
+
+  /**
+   * @param {task} task
+   */
+  static assign(task) {
+    const channel = new MessageChannel();
+    const worker = this.#ready.pop();
+    worker.ready = false;
+
+    const res = new Promise((resolve) => {
+      channel.port1.once("message", ({ result, threadId }) => {
+        resolve(result);
+        worker.ready = true;
+        this.#ready.push(worker);
+      });
+    });
+
+    const port = [channel.port2];
+    worker.worker.postMessage({ task, port }, port);
+    return res;
+  }
+
+  /**
+   * @param  {...task} input
+   */
+  static async massAssign(...input) {
+    let tasks =
+      input.length == 1 && input[0] instanceof Array ? input[0] : input;
+    let results = [];
+    let complete = { count: 0, defer: new Deferred(), loopDone: false };
+    let defer = new Deferred();
+    let waiting = false;
+    for (const [index, task] of tasks.entries()) {
+      this.assign(task).then((result) => {
+        results.push(result);
+        complete.count++;
+        if (waiting) defer.resolve();
+        if (complete.loopDone && complete.count == tasks.length)
+          complete.defer.resolve();
+      });
+      if (this.#ready.length == 0 && index < tasks.length - 1) {
+        waiting = true;
+        await defer.promise;
+        defer = new Deferred();
+        waiting = false;
+      }
+    }
+    complete.loopDone = true;
+    await complete.defer.promise;
+    return results;
+  }
+  static get length() {
+    return this.#workers.length;
+  }
+}
+
 const world = new World(200n, 200n, 1000, new Entities.Virus(100, 100));
-world.update();
+world.update(0, Workers);
 
 let first = true;
 // Websocket Server
@@ -307,7 +403,7 @@ function colour(hex) {
 async function gameTick(depth, tickData, prevTime) {
   if (wsServer.clients.size !== 0) {
     // Update World
-    world.update((Date.now() - prevTime) / 25);
+    await world.update((Date.now() - prevTime) / 25, Workers);
     // Make Tick data
     tickData.push(...(await Promise.all(createData())));
     if (depth == 0) {
