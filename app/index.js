@@ -24,6 +24,7 @@ class Deferred {
     });
   }
 }
+
 class Workers {
   /** @type {{worker: Worker, ready: boolean}[]} */
   static #workers;
@@ -57,7 +58,7 @@ class Workers {
     worker.ready = false;
 
     const res = new Promise((resolve) => {
-      channel.port1.once("message", ({ result, threadId }) => {
+      channel.port1.once("message", (result) => {
         resolve(result);
         worker.ready = true;
         this.#ready.push(worker);
@@ -403,7 +404,10 @@ function colour(hex) {
 async function gameTick(depth, tickData, prevTime) {
   if (wsServer.clients.size !== 0) {
     // Update World
+    const start = Date.now();
     await world.update((Date.now() - prevTime) / 25, Workers);
+    const end = Date.now();
+    console.log(end - start);
     // Make Tick data
     tickData.push(...(await Promise.all(createData())));
     if (depth == 0) {

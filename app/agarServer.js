@@ -143,8 +143,10 @@ class Entity {
 class Circle extends Entity {
   /** @type {string} */
   colour;
-  /**@type {number} */
+  /** @type {number} */
   mass;
+  /** @type {{tick:number, data:{}}} */
+  packData;
   /**
    * @param {number} x
    * @param {number} y
@@ -154,6 +156,7 @@ class Circle extends Entity {
     super(x, y);
     this.colour = colour;
     this.mass = mass;
+    this.packData = { tick: Number.MIN_SAFE_INTEGER, data: {} };
   }
 
   /**
@@ -205,6 +208,19 @@ class Circle extends Entity {
   }
 }
 
+/**
+ * @typedef {Object} PseudoPlayer
+ * @property {number} x
+ * @property {number} y
+ * @property {string} uuid
+ * @property {number} mass
+ * @property {number} radius
+ * @property {number} velX
+ * @property {number} velY
+ * @property {number} mergeTimer
+ * @property {string} userID
+ */
+
 class Player extends Circle {
   /** @type {string} */
   _userID;
@@ -248,6 +264,58 @@ class Player extends Circle {
     newPlayer.velY = vector.y;
     newPlayer.mass = this.mass;
     return newPlayer;
+  }
+
+  /**
+   * @param {number} bitmask
+   */
+  pack(bitmask) {
+    let result = {};
+    if (bitmask & 0b000000001) {
+      // x
+      result.x = this.x;
+    }
+    if (bitmask & 0b000000010) {
+      // y
+      result.y = this.y;
+    }
+    if (bitmask & 0b000000100) {
+      // uuid
+      result.uuid = this.uuid.UUID;
+    }
+    if (bitmask & 0b000001000) {
+      // mass
+      result.mass = this.mass;
+    }
+    if (bitmask & 0b000010000) {
+      // radius
+      result.radius = this.radius;
+    }
+    if (bitmask & 0b000100000) {
+      // velX
+      result.velX = this.velX;
+    }
+    if (bitmask & 0b001000000) {
+      // velY
+      result.velY = this.velY;
+    }
+    if (bitmask & 0b010000000) {
+      // mergeTimer
+      result.mergeTimer = this.mergeTimer;
+    }
+    if (bitmask & 0b100000000) {
+      // userID
+      result.userID = this.userID;
+    }
+    return result;
+  }
+
+  collisionPack(tick) {
+    if (tick !== this.packData) {
+      this.packData.tick = tick;
+      this.packData.data = this.pack(0b110011111);
+    }
+    return this.packData.data;
   }
 }
 
@@ -368,6 +436,27 @@ class User extends Entity {
       y: Math.cos(angle) * dist,
     };
   }
+
+  pack(bitmask) {
+    let result = {};
+    if (bitmask & 0b0001) {
+      // x
+      result.x = this.x;
+    }
+    if (bitmask & 0b0010) {
+      // y
+      result.y = this.y;
+    }
+    if (bitmask & 0b0100) {
+      // uuid
+      result.uuid = this.uuid.UUID;
+    }
+    if (bitmask & 0b1000) {
+      // mouseVector
+      result.mouseVector = this.mouseVector;
+    }
+    return result;
+  }
 }
 
 class World {
@@ -391,6 +480,8 @@ class World {
   minFood;
   /** @type {{UUID: string, buff: ArrayBuffer}[]} */
   killed;
+  /** @type {number} */
+  tick;
 
   /**
    * @param {bigint} width
@@ -409,6 +500,7 @@ class World {
     this.#height = height;
     this.minFood = minFood;
     this.killed = [];
+    this.tick = 0;
   }
 
   /**
@@ -443,39 +535,66 @@ class World {
   /**
    * @param {number} DeltaTime
    */
-  update(DeltaTime) {
+  async update(DeltaTime, Workers) {
+    this.tick++;
     const intersections = findCircleIntersections(Object.values(this.entities));
-    intersections.forEach(this.collisionSim, this);
+    this.collisionSim(intersections, DeltaTime);
 
     for (const [uuid, user] of Object.entries(this.users)) {
       const players = Object.values(user.players);
 
-      players.forEach((player) => {
-        player.mass = Math.max(player.mass * 0.9998, 10);
-
-        player.velX = player.velX * 0.9 ** DeltaTime;
-        player.velY = player.velY * 0.9 ** DeltaTime;
-
-        const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
-        const cohesionStrength =
-          0.01 *
-          player.getDistance(user) ** (0.1 * player.getDistance(user) + 0.5);
-
-        const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
-        const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
-
-        player.x +=
-          (8 / (player.radius * 10) + 0.13) * user.mouseVector.x * DeltaTime +
-          player.velX +
-          cohereX;
-        player.y +=
-          (8 / (player.radius * 10) + 0.13) * user.mouseVector.y * DeltaTime +
-          player.velY +
-          cohereY;
-
-        player.x = clamp(player.x, 0, this.width);
-        player.y = clamp(player.y, 0, this.height);
+      const packedUser = user.pack(0b1111);
+      const packedWorld = { width: this.width, height: this.height };
+      const tasks = players.map((player) => {
+        return {
+          type: 1,
+          data: {
+            player: player.pack(0b001111111),
+            user: packedUser,
+            world: packedWorld,
+            DeltaTime,
+          },
+        };
       });
+
+      const result = await Workers.massAssign(tasks);
+
+      result.forEach(
+        /** @param {PseudoPlayer} result */
+        (result) => {
+          user.players[result.uuid].x = result.x;
+          user.players[result.uuid].y = result.y;
+          user.players[result.uuid].mass = result.mass;
+          user.players[result.uuid].velX = result.velX;
+          user.players[result.uuid].velY = result.velY;
+        }
+      );
+      // players.forEach((player) => {
+      //   player.mass = Math.max(player.mass * 0.9998, 10);
+
+      //   player.velX = player.velX * 0.9 ** DeltaTime;
+      //   player.velY = player.velY * 0.9 ** DeltaTime;
+
+      //   const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
+      //   const cohesionStrength =
+      //     0.01 *
+      //     player.getDistance(user) ** (0.1 * player.getDistance(user) + 0.5);
+
+      //   const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
+      //   const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
+
+      //   player.x +=
+      //     (8 / (player.radius * 10) + 0.13) * user.mouseVector.x * DeltaTime +
+      //     player.velX +
+      //     cohereX;
+      //   player.y +=
+      //     (8 / (player.radius * 10) + 0.13) * user.mouseVector.y * DeltaTime +
+      //     player.velY +
+      //     cohereY;
+
+      //   player.x = clamp(player.x, 0, this.width);
+      //   player.y = clamp(player.y, 0, this.height);
+      // });
 
       user.x = (user.bounds.left + user.bounds.right) / 2;
       user.y = (user.bounds.top + user.bounds.bottom) / 2;
@@ -509,41 +628,43 @@ class World {
   }
 
   /**
-   * @param {[Circle, Circle]} param0
+   * @param {[Circle, Circle][]} intersections
    */
-  collisionSim([larger, smaller]) {
-    if (larger instanceof Player && smaller instanceof Food) {
-      if (!larger.encloses(smaller)) return;
-      larger.mass++;
-      delete this.entities[smaller.uuid.UUID];
-      delete this.food[smaller.uuid.UUID];
-      this.killed.push(smaller.uuid);
-    } else if (larger instanceof Player && smaller instanceof Player) {
-      // TODO: Add Eating & Merge Timer
-      if (larger.userID == smaller.userID) {
-        // * User is the same
-        const separation = getForce(
-          1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
-          larger.radius
-        );
-        if (
-          separation > Number.MAX_SAFE_INTEGER ||
-          separation < Number.MIN_SAFE_INTEGER
-        )
-          return;
-        const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-        smaller.velX += Math.cos(angle) * separation * DeltaTime;
-        smaller.velY += Math.sin(angle) * separation * DeltaTime;
-        larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
-        larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
-      } else {
-        // * User is different
-        console.log(larger.getOverlap(smaller) / smaller.mass);
+  collisionSim(intersections, DeltaTime) {
+    intersections.forEach(([larger, smaller]) => {
+      if (larger instanceof Player && smaller instanceof Food) {
+        if (!larger.encloses(smaller)) return;
+        larger.mass++;
+        delete this.entities[smaller.uuid.UUID];
+        delete this.food[smaller.uuid.UUID];
+        this.killed.push(smaller.uuid);
+      } else if (larger instanceof Player && smaller instanceof Player) {
+        // TODO: Add Eating & Merge Timer
+        if (larger.userID == smaller.userID) {
+          // * User is the same
+          const separation = getForce(
+            1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
+            larger.radius
+          );
+          if (
+            separation > Number.MAX_SAFE_INTEGER ||
+            separation < Number.MIN_SAFE_INTEGER
+          )
+            return;
+          const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
+          smaller.velX += Math.cos(angle) * separation * DeltaTime;
+          smaller.velY += Math.sin(angle) * separation * DeltaTime;
+          larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
+          larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
+        } else {
+          // * User is different
+          console.log(larger.getOverlap(smaller) / smaller.mass);
+        }
+      } else if (larger instanceof Player && smaller instanceof Virus) {
+      } else if (larger instanceof Player && smaller instanceof Mass) {
+      } else if (larger instanceof Virus && smaller instanceof Mass) {
       }
-    } else if (larger instanceof Player && smaller instanceof Virus) {
-    } else if (larger instanceof Player && smaller instanceof Mass) {
-    } else if (larger instanceof Virus && smaller instanceof Mass) {
-    }
+    });
   }
 
   reset() {
