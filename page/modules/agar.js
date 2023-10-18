@@ -160,6 +160,8 @@ class World {
   #width;
   /** @type {bigint} */
   #height;
+  /** @type {PseudoEntity[]} */
+  #toKill;
 
   /**
    * @param {bigint} width
@@ -169,6 +171,7 @@ class World {
     this.#entities = {};
     this.#width = width;
     this.#height = height;
+    this.#toKill = [];
   }
 
   /**
@@ -209,13 +212,8 @@ class World {
 
   /**
    * @param {Array.<PseudoEntity>} entityInfo
-   * @param {Array.<string>} killed
    */
-  update(entityInfo, killed) {
-    if (entityInfo.length < Object.keys(this.#entities).length) {
-      killed.forEach((uuid) => delete this.#entities[uuid]);
-    }
-
+  update(entityInfo) {
     const entities = [];
     for (const pseudoEntity of entityInfo) {
       if (Object.hasOwn(this.#entities, pseudoEntity.uuid)) {
@@ -249,6 +247,14 @@ class World {
       }
     }
     this.addEntities(...entities);
+  }
+
+  /**
+   * @param {PseudoEntity[]} killed
+   */
+  kill(killed) {
+    this.#toKill.forEach((uuid) => delete this.#entities[uuid]);
+    this.#toKill = killed;
   }
 
   interpolate(delta) {

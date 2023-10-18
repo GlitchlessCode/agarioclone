@@ -122,7 +122,9 @@ async function parseMessage({ data }) {
         dataView.getFloat32(24),
         9
       );
-      world.update(...getEntities(dataView));
+      const [entityInfo, killed] = getEntities(dataView);
+      world.update(entityInfo);
+      world.kill(killed);
       prevTime = Date.now();
       break;
     case 0:
@@ -205,8 +207,10 @@ async function parseMessage({ data }) {
  *
  * @param {number} startX
  * @param {number} startY
+ * @param {number} startScale
  * @param {number} targetX
  * @param {number} targetY
+ * @param {number} targetScale
  * @param {number} depth
  * @param {number} [divide]
  */
@@ -225,7 +229,7 @@ function interpolatedCam(
   camera.camScale =
     (depth / divide) * startScale + (1 - depth / divide) * targetScale;
   world.interpolate(depth / divide);
-  if (depth > 0)
+  if (depth > 0) {
     interpolator = setTimeout(
       interpolatedCam,
       average / divide,
@@ -238,6 +242,7 @@ function interpolatedCam(
       depth - 1,
       divide
     );
+  }
 }
 
 /**
@@ -284,7 +289,7 @@ function colour(...values) {
 const BUFFERSIZE = 57;
 /**
  * @param {DataView} dataSet
- * @returns {PseudoEntity}
+ * @returns {[PseudoEntity[], PseudoEntity[]]}
  */
 function getEntities(dataSet) {
   const entities = [];

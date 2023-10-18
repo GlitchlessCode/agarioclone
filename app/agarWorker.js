@@ -28,6 +28,9 @@ parentPort.on(
       case 1:
         port[0].postMessage(movePlayer(task.data));
         break;
+      case 2:
+        port[0].postMessage(collisionSim(task.data));
+        break;
     }
   }
 );
@@ -59,3 +62,33 @@ function movePlayer({ player, user, world, DeltaTime }) {
 
   return player;
 }
+
+function collisionSim(data) {
+  const { larger, smaller } = data;
+  // Values both from 0-3; Bitshift larger to the left twice; Composes this: 0b0000LLSS
+  const bitmask = (larger.type << 2) + smaller.type;
+  switch (bitmask) {
+    case 0: // (0<<2 = 0) + 0 = 0
+      return playerPlayer(data);
+    case 1: // (0<<2 = 0) + 1 = 1
+      return playerVirus(data);
+    case 2: // (0<<2 = 0) + 2 = 2
+      return playerFood(data);
+    case 3: // (0<<2 = 0) + 3 = 3
+      return playerMass(data);
+    case 7: // (1<<2 = 4) + 3 = 7
+      return virusMass(data);
+  }
+}
+
+function playerPlayer({ larger, smaller, DeltaTime }) {}
+
+function playerVirus({ larger, smaller, DeltaTime }) {}
+
+function playerFood({ larger, smaller, DeltaTime }) {
+  console.log("PlayerFood");
+}
+
+function playerMass({ larger, smaller, DeltaTime }) {}
+
+function virusMass({ larger, smaller, DeltaTime }) {}

@@ -206,6 +206,13 @@ class Circle extends Entity {
   get radius() {
     return Math.sqrt(this.mass / Math.PI);
   }
+
+  /**
+   * @param {number} tick
+   */
+  collisionPack(tick) {
+    return { type: 255 };
+  }
 }
 
 /**
@@ -270,7 +277,7 @@ class Player extends Circle {
    * @param {number} bitmask
    */
   pack(bitmask) {
-    let result = {};
+    let result = { type: 0 };
     if (bitmask & 0b000000001) {
       // x
       result.x = this.x;
@@ -310,6 +317,9 @@ class Player extends Circle {
     return result;
   }
 
+  /**
+   * @param {number} tick
+   */
   collisionPack(tick) {
     if (tick !== this.packData) {
       this.packData.tick = tick;
@@ -327,6 +337,45 @@ class Food extends Circle {
   constructor(x, y) {
     super(x, y, stringToColour((Math.random() * 10).toString()), 1);
   }
+
+  /**
+   * @param {number} bitmask
+   */
+  pack(bitmask) {
+    let result = { type: 2 };
+    if (bitmask & 0b00001) {
+      // x
+      result.x = this.x;
+    }
+    if (bitmask & 0b00010) {
+      // y
+      result.y = this.y;
+    }
+    if (bitmask & 0b00100) {
+      // uuid
+      result.uuid = this.uuid.UUID;
+    }
+    if (bitmask & 0b01000) {
+      // mass
+      result.mass = this.mass;
+    }
+    if (bitmask & 0b10000) {
+      // radius
+      result.radius = this.radius;
+    }
+    return result;
+  }
+
+  /**
+   * @param {number} tick
+   */
+  collisionPack(tick) {
+    if (tick !== this.packData) {
+      this.packData.tick = tick;
+      this.packData.data = this.pack(0b11111);
+    }
+    return this.packData.data;
+  }
 }
 
 class Virus extends Circle {
@@ -336,6 +385,45 @@ class Virus extends Circle {
    */
   constructor(x, y) {
     super(x, y, "#22ff22", 100);
+  }
+
+  /**
+   * @param {number} bitmask
+   */
+  pack(bitmask) {
+    let result = { type: 1 };
+    if (bitmask & 0b00001) {
+      // x
+      result.x = this.x;
+    }
+    if (bitmask & 0b00010) {
+      // y
+      result.y = this.y;
+    }
+    if (bitmask & 0b00100) {
+      // uuid
+      result.uuid = this.uuid.UUID;
+    }
+    if (bitmask & 0b01000) {
+      // mass
+      result.mass = this.mass;
+    }
+    if (bitmask & 0b10000) {
+      // radius
+      result.radius = this.radius;
+    }
+    return result;
+  }
+
+  /**
+   * @param {number} tick
+   */
+  collisionPack(tick) {
+    if (tick !== this.packData) {
+      this.packData.tick = tick;
+      this.packData.data = this.pack(0b11111);
+    }
+    return this.packData.data;
   }
 }
 
@@ -347,6 +435,45 @@ class Mass extends Circle {
    */
   constructor(x, y, colour) {
     super(x, y, colour, 12);
+  }
+
+  /**
+   * @param {number} bitmask
+   */
+  pack(bitmask) {
+    let result = { type: 3 };
+    if (bitmask & 0b00001) {
+      // x
+      result.x = this.x;
+    }
+    if (bitmask & 0b00010) {
+      // y
+      result.y = this.y;
+    }
+    if (bitmask & 0b00100) {
+      // uuid
+      result.uuid = this.uuid.UUID;
+    }
+    if (bitmask & 0b01000) {
+      // mass
+      result.mass = this.mass;
+    }
+    if (bitmask & 0b10000) {
+      // radius
+      result.radius = this.radius;
+    }
+    return result;
+  }
+
+  /**
+   * @param {number} tick
+   */
+  collisionPack(tick) {
+    if (tick !== this.packData) {
+      this.packData.tick = tick;
+      this.packData.data = this.pack(0b11111);
+    }
+    return this.packData.data;
   }
 }
 
@@ -538,6 +665,17 @@ class World {
   async update(DeltaTime, Workers) {
     this.tick++;
     const intersections = findCircleIntersections(Object.values(this.entities));
+    const intersectionTasks = intersections.map(([larger, smaller]) => {
+      return {
+        type: 2,
+        data: {
+          smaller: smaller.collisionPack(this.tick),
+          larger: larger.collisionPack(this.tick),
+          DeltaTime,
+        },
+      };
+    });
+    await Workers.massAssign(intersectionTasks);
     this.collisionSim(intersections, DeltaTime);
 
     for (const [uuid, user] of Object.entries(this.users)) {
@@ -545,7 +683,7 @@ class World {
 
       const packedUser = user.pack(0b1111);
       const packedWorld = { width: this.width, height: this.height };
-      const tasks = players.map((player) => {
+      const moveTasks = players.map((player) => {
         return {
           type: 1,
           data: {
@@ -557,7 +695,7 @@ class World {
         };
       });
 
-      const result = await Workers.massAssign(tasks);
+      const result = await Workers.massAssign(moveTasks);
 
       result.forEach(
         /** @param {PseudoPlayer} result */

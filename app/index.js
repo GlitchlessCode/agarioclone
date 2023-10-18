@@ -76,6 +76,7 @@ class Workers {
   static async massAssign(...input) {
     let tasks =
       input.length == 1 && input[0] instanceof Array ? input[0] : input;
+    if (tasks.length == 0) return [];
     let results = [];
     let complete = { count: 0, defer: new Deferred(), loopDone: false };
     let defer = new Deferred();
@@ -111,6 +112,8 @@ let first = true;
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
 wsServer.on("connection", async function (ws, req) {
+  // TODO: REWRITE STARTUP
+  // * The startup sequence leaves ghost food orbs on the client side
   const UUID = uuid();
   ws.id = UUID;
   ws.queue = [];
