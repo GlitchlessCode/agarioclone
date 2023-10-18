@@ -156,7 +156,7 @@ class Circle extends Entity {
     super(x, y);
     this.colour = colour;
     this.mass = mass;
-    this.packData = { tick: Number.MIN_SAFE_INTEGER, data: {} };
+    this.packData = { tick: Number.MIN_SAFE_INTEGER, data: {} }; // ! Going to remove
   }
 
   /**
