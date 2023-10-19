@@ -1,4 +1,6 @@
-const { parentPort, threadId } = require("worker_threads");
+/** @type {{parentPort:MessagePort, threadId:number, workerData:SharedArrayBuffer}} */
+const { parentPort, threadId, workerData } = require("worker_threads");
+const SHARED_MEMORY = new Uint8Array(workerData);
 
 /**
  * @param {number} value

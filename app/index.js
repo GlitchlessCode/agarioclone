@@ -9,6 +9,18 @@ const { World, Entities, uuid, clamp, getType } = require("./agarServer");
 const app = express();
 const clients = {};
 
+/*
+Bytes per entity: 50
+| Total Max Player Count: 4096 => 204800 Bytes
+|| Max User Count: 256
+||| Max Player per User Count: 16
+| Total Food Count: 1024 => 51200 Bytes
+| Total Virus Count: 64 => 3200 Bytes
+| Max Mass Allowance: 512 => 25600 Bytes
+Total Byte Size: 284800
+*/
+const SHARED_MEMORY = new DataView(new SharedArrayBuffer(284800));
+
 class Deferred {
   /** @type {function} */
   resolve;
@@ -34,8 +46,11 @@ class Workers {
     this.#workers = Array.from(
       { length: Math.ceil(availableParallelism / 2) },
       () => {
+        const worker = new Worker(path.join(__dirname, "/agarWorker.js"), {
+          workerData: SHARED_MEMORY.buffer,
+        });
         return {
-          worker: new Worker(path.join(__dirname, "/agarWorker.js")),
+          worker,
           ready: true,
         };
       }
@@ -105,7 +120,7 @@ class Workers {
   }
 }
 
-const world = new World(200n, 200n, 1000, new Entities.Virus(100, 100));
+const world = new World(350n, 350n, 1024, new Entities.Virus(175, 175));
 world.update(0, Workers);
 
 let first = true;
