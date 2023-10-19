@@ -1,2 +1,5 @@
-State (1, UInt8), Type (1, UInt8), Different (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32), MergeTimer(2, Uint16), UserID (1, Uint8), UUID (16, 16xUint8)
-Use SharedArrayBuffer, with typedarray wrapper for using .subarray. Use Atomics to claim.
+Player: State (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32), MergeTimer(2, Uint16), UserID (1, Uint8)
+Virus: State (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32)
+Food: State (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Mass (4, Float32)
+Mass: State (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32)
+Use SharedArrayBuffer, with typedarray wrapper for using .subarray. Use Atomics and Mutex to claim

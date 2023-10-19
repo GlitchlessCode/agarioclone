@@ -10,16 +10,19 @@ const app = express();
 const clients = {};
 
 /*
-Bytes per entity: 50
-| Total Max Player Count: 4096 => 204800 Bytes
+Bytes per player: 32
+Bytes per Virus: 29
+Bytes per Food: 21
+Bytes per Mass: 29
+| Total Max Player Count: 4096 => 131072 Bytes
 || Max User Count: 256
 ||| Max Player per User Count: 16
-| Total Food Count: 1024 => 51200 Bytes
-| Total Virus Count: 64 => 3200 Bytes
-| Max Mass Allowance: 512 => 25600 Bytes
-Total Byte Size: 284800
+| Total Virus Count: 64 => 1856 Bytes
+| Total Food Count: 1024 => 21504 Bytes
+| Max Mass Allowance: 512 => 14848 Bytes
+Total Byte Size: 169280
 */
-const SHARED_MEMORY = new DataView(new SharedArrayBuffer(284800));
+const SHARED_MEMORY = new Uint8Array(new SharedArrayBuffer(169280));
 
 class Deferred {
   /** @type {function} */
@@ -120,7 +123,13 @@ class Workers {
   }
 }
 
-const world = new World(350n, 350n, 1024, new Entities.Virus(175, 175));
+const world = new World(
+  350n,
+  350n,
+  1024,
+  SHARED_MEMORY,
+  new Entities.Virus(175, 175)
+);
 world.update(0, Workers);
 
 let first = true;

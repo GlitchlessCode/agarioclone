@@ -613,9 +613,11 @@ class World {
   /**
    * @param {bigint} width
    * @param {bigint} height
+   * @param {number} minFood
+   * @param {Uint8Array} sharedMemory
    * @param  {...Circle} entities
    */
-  constructor(width, height, minFood, ...entities) {
+  constructor(width, height, minFood, sharedMemory, ...entities) {
     this.entities = {};
     this.players = {};
     this.viruses = {};
