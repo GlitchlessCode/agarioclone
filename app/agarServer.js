@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { SharedBufferPartition } = require("./modules/sharedData");
 
 /**
  * @param {Circle} entity
@@ -94,21 +95,20 @@ function getForce(percent, radius) {
 }
 
 class Entity {
+  /** @type {SharedBufferPartition} */
+  _Partition;
   /** @type {boolean} */
   different;
-  /** @type {number} */
-  x;
-  /** @type {number} */
-  y;
   /** @type {{UUID: string, buff: ArrayBuffer}} */
   _uuid;
   /**
    * @param {number} x
    * @param {number} y
-   * @param {number} radius
+   * @param {SharedBufferPartition} Partition
    * @param {string} [UUID]
    */
-  constructor(x, y, UUID) {
+  constructor(x, y, Partition, UUID) {
+    this._Partition = Partition;
     this._uuid = UUID ? UUID : uuid();
     this.x = x;
     this.y = y;
@@ -138,6 +138,22 @@ class Entity {
   getAngle(entity) {
     return Math.atan2(entity.y - this.y, entity.x - this.x);
   }
+
+  get x() {
+    return this._Partition.data.getFloat64(0);
+  }
+
+  set x(val) {
+    this._Partition.data.setFloat64(0, val);
+  }
+
+  get y() {
+    return this._Partition.data.getFloat64(8);
+  }
+
+  set y(val) {
+    this._Partition.data.setFloat64(8, val);
+  }
 }
 
 class Circle extends Entity {
@@ -151,9 +167,11 @@ class Circle extends Entity {
    * @param {number} x
    * @param {number} y
    * @param {string} colour
+   * @param {number} mass
+   * @param {SharedBufferPartition} Partition
    */
-  constructor(x, y, colour, mass) {
-    super(x, y);
+  constructor(x, y, colour, mass, Partition) {
+    super(x, y, Partition);
     this.colour = colour;
     this.mass = mass;
     this.packData = { tick: Number.MIN_SAFE_INTEGER, data: {} }; // ! Going to remove
@@ -244,9 +262,10 @@ class Player extends Circle {
    * @param {number} x
    * @param {number} y
    * @param {string} userID
+   * @param {SharedBufferPartition} Partition
    */
-  constructor(x, y, userID) {
-    super(x, y, "#00000000", 25);
+  constructor(x, y, userID, Partition) {
+    super(x, y, "#00000000", 25, Partition);
     this._userID = userID;
     this.velX = 0;
     this.velY = 0;
@@ -333,9 +352,10 @@ class Food extends Circle {
   /**
    * @param {number} x
    * @param {number} y
+   * @param {SharedBufferPartition} Partition
    */
-  constructor(x, y) {
-    super(x, y, stringToColour((Math.random() * 10).toString()), 1);
+  constructor(x, y, Partition) {
+    super(x, y, stringToColour((Math.random() * 10).toString()), 1, Partition);
   }
 
   /**
@@ -382,9 +402,10 @@ class Virus extends Circle {
   /**
    * @param {number} x
    * @param {number} y
+   * @param {SharedBufferPartition} Partition
    */
-  constructor(x, y) {
-    super(x, y, "#22ff22", 100);
+  constructor(x, y, Partition) {
+    super(x, y, "#22ff22", 100, Partition);
   }
 
   /**
@@ -433,8 +454,8 @@ class Mass extends Circle {
    * @param {number} y
    * @param {string} colour
    */
-  constructor(x, y, colour) {
-    super(x, y, colour, 12);
+  constructor(x, y, colour, Partition) {
+    super(x, y, colour, 12, Partition);
   }
 
   /**
@@ -477,7 +498,45 @@ class Mass extends Circle {
   }
 }
 
-class User extends Entity {
+class LocalEntity {
+  /** @type {number} */
+  x;
+  /** @type {number} */
+  y;
+  /** @type {{UUID: string, buff: ArrayBuffer}} */
+  _uuid;
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   * @param {string} [UUID]
+   */
+  constructor(x, y, UUID) {
+    this._uuid = UUID ? UUID : uuid();
+    this.x = x;
+    this.y = y;
+  }
+
+  get uuid() {
+    return this._uuid;
+  }
+
+  /**
+   * @param {Entity} entity
+   */
+  getDistance(entity) {
+    return Math.hypot(this.x - entity.x, this.y - entity.y);
+  }
+
+  /**
+   * @param {Entity} entity
+   */
+  getAngle(entity) {
+    return Math.atan2(entity.y - this.y, entity.x - this.x);
+  }
+}
+
+class User extends LocalEntity {
   /** @type {{x: number, y:number}} */
   mouse;
   /** @type {Object.<string, Player>} */
@@ -607,17 +666,73 @@ class World {
   minFood;
   /** @type {{UUID: string, buff: ArrayBuffer}[]} */
   killed;
+  /** @type {{player: SharedBufferPartition[], virus: SharedBufferPartition[], food: SharedBufferPartition[], mass: SharedBufferPartition[]}} */
+  dealloc;
   /** @type {number} */
   tick;
 
+  /**
+   * @typedef {Object} Partition
+   * @property {number} size
+   * @property {number} count
+   */
   /**
    * @param {bigint} width
    * @param {bigint} height
    * @param {number} minFood
    * @param {Uint8Array} sharedMemory
+   * @param {{player: Partition, virus: Partition, food: Partition, mass: Partition}} partitionData
    * @param  {...Circle} entities
    */
-  constructor(width, height, minFood, sharedMemory, ...entities) {
+  constructor(
+    width,
+    height,
+    minFood,
+    sharedMemory,
+    partitionData,
+    ...entities
+  ) {
+    this.dealloc = {
+      player: new Array(),
+      virus: new Array(),
+      food: new Array(),
+      mass: new Array(),
+    };
+    const { player, virus, food, mass } = partitionData;
+    let total = 0;
+    // Player Partitioning
+    total += SharedBufferPartition.massConstruct(
+      sharedMemory,
+      this.dealloc.player,
+      player.count,
+      player.size,
+      total
+    );
+    // Virus Partitioning
+    total += SharedBufferPartition.massConstruct(
+      sharedMemory,
+      this.dealloc.virus,
+      virus.count,
+      virus.size,
+      total
+    );
+    // Food Partitioning
+    total += SharedBufferPartition.massConstruct(
+      sharedMemory,
+      this.dealloc.food,
+      food.count,
+      food.size,
+      total
+    );
+    // Mass Partitioning
+    SharedBufferPartition.massConstruct(
+      sharedMemory,
+      this.dealloc.mass,
+      mass.count,
+      mass.size,
+      total
+    );
+
     this.entities = {};
     this.players = {};
     this.viruses = {};
@@ -638,10 +753,22 @@ class World {
   addEntities(...entities) {
     entities.forEach(
       /**
-       * @param {Circle} element
+       * @param {Circle|PlayerParams|User} element
        */
       (element) => {
-        if (!(element instanceof Entity))
+        if (element instanceof PlayerParams) {
+          this.addEntities(
+            new Player(
+              element.x,
+              element.y,
+              element.UUID,
+              this.dealloc.player.shift() // ! Temporary
+            )
+          );
+          return;
+        }
+
+        if (!(element instanceof Entity) && !(element instanceof LocalEntity))
           throw new TypeError("entities[] must be of type Entity");
         else {
           if (element instanceof User) this.users[element.uuid.UUID] = element;
@@ -752,18 +879,22 @@ class World {
       user.y = clamp(user.y, 0, this.height);
     }
 
-    if (Object.keys(this.food).length < this.minFood) {
-      this.addEntities(
-        ...Array.from(
-          { length: this.minFood - Object.keys(this.food).length },
-          () =>
-            new Food(
-              Math.random() * this.width,
-              Math.random() * this.height,
-              0.3
-            )
-        )
-      );
+    try {
+      if (Object.keys(this.food).length < this.minFood) {
+        this.addEntities(
+          ...Array.from(
+            { length: this.minFood - Object.keys(this.food).length },
+            () =>
+              new Food(
+                Math.random() * this.width,
+                Math.random() * this.height,
+                this.dealloc.food.shift()
+              )
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
     }
   }
 
@@ -850,6 +981,17 @@ function uuid() {
   return { UUID, buff };
 }
 
+class PlayerParams {
+  x;
+  y;
+  UUID;
+  constructor(x, y, UUID) {
+    this.x = x;
+    this.y = y;
+    this.UUID = UUID;
+  }
+}
+
 module.exports = {
   World,
   Circle,
@@ -858,7 +1000,7 @@ module.exports = {
   clamp,
   getType,
   Entities: {
-    Player,
+    Player: PlayerParams,
     Virus,
     Food,
     Mass,

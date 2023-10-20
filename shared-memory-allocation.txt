@@ -1,5 +1,5 @@
-Player: State (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32), MergeTimer(2, Uint16), UserID (1, Uint8)
-Virus: State (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32)
-Food: State (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Mass (4, Float32)
-Mass: State (1, UInt8), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32)
+Player: State (4, Int32), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32), MergeTimer(2, Uint16), UserID (1, Uint8), BLANKSPACE (1) # Required offset
+Virus: State (4, Int32), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32)
+Food: State (4, Int32), Xpos (8, Float64), Ypos (8, Float64), Mass (4, Float32)
+Mass: State (4, Int32), Xpos (8, Float64), Ypos (8, Float64), Xvel (4, Float32), Yvel (4, Float32), Mass (4, Float32)
 Use SharedArrayBuffer, with typedarray wrapper for using .subarray. Use Atomics and Mutex to claim
