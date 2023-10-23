@@ -163,8 +163,6 @@ class Entity {
 class Circle extends Entity {
   /** @type {string} */
   colour;
-  /** @type {{tick:number, data:{}}} */
-  packData;
   /**
    * @param {number} x
    * @param {number} y
@@ -176,7 +174,6 @@ class Circle extends Entity {
     super(x, y, Partition);
     this.colour = colour;
     this.mass = mass;
-    this.packData = { tick: Number.MIN_SAFE_INTEGER, data: {} }; // ! Going to remove
   }
 
   /**
@@ -235,11 +232,12 @@ class Circle extends Entity {
     return Math.sqrt(this.mass / Math.PI);
   }
 
-  /**
-   * @param {number} tick
-   */
-  collisionPack(tick) {
-    return { type: 255 };
+  pack() {
+    throw new TypeError("cannot pack Entity of type Circle");
+  }
+
+  get name() {
+    return "circle";
   }
 }
 
@@ -332,59 +330,12 @@ class Player extends Circle {
     return this._Partition.data.getUint8(30);
   }
 
-  /**
-   * @param {number} bitmask
-   */
-  pack(bitmask) {
-    let result = { type: 0 };
-    if (bitmask & 0b000000001) {
-      // x
-      result.x = this.x;
-    }
-    if (bitmask & 0b000000010) {
-      // y
-      result.y = this.y;
-    }
-    if (bitmask & 0b000000100) {
-      // uuid
-      result.uuid = this.uuid.UUID;
-    }
-    if (bitmask & 0b000001000) {
-      // mass
-      result.mass = this.mass;
-    }
-    if (bitmask & 0b000010000) {
-      // radius
-      result.radius = this.radius;
-    }
-    if (bitmask & 0b000100000) {
-      // velX
-      result.velX = this.velX;
-    }
-    if (bitmask & 0b001000000) {
-      // velY
-      result.velY = this.velY;
-    }
-    if (bitmask & 0b010000000) {
-      // mergeTimer
-      result.mergeTimer = this.mergeTimer;
-    }
-    if (bitmask & 0b100000000) {
-      // userID
-      result.userID = this.userID;
-    }
-    return result;
+  pack() {
+    return { type: 0, index: this._Partition.index };
   }
 
-  /**
-   * @param {number} tick
-   */
-  collisionPack(tick) {
-    if (tick !== this.packData) {
-      this.packData.tick = tick;
-      this.packData.data = this.pack(0b110011111);
-    }
-    return this.packData.data;
+  get name() {
+    return "player";
   }
 }
 
@@ -398,43 +349,12 @@ class Food extends Circle {
     super(x, y, stringToColour((Math.random() * 10).toString()), 1, Partition);
   }
 
-  /**
-   * @param {number} bitmask
-   */
-  pack(bitmask) {
-    let result = { type: 2 };
-    if (bitmask & 0b00001) {
-      // x
-      result.x = this.x;
-    }
-    if (bitmask & 0b00010) {
-      // y
-      result.y = this.y;
-    }
-    if (bitmask & 0b00100) {
-      // uuid
-      result.uuid = this.uuid.UUID;
-    }
-    if (bitmask & 0b01000) {
-      // mass
-      result.mass = this.mass;
-    }
-    if (bitmask & 0b10000) {
-      // radius
-      result.radius = this.radius;
-    }
-    return result;
+  pack() {
+    return { type: 2, index: this._Partition.index };
   }
 
-  /**
-   * @param {number} tick
-   */
-  collisionPack(tick) {
-    if (tick !== this.packData) {
-      this.packData.tick = tick;
-      this.packData.data = this.pack(0b11111);
-    }
-    return this.packData.data;
+  get name() {
+    return "food";
   }
 }
 
@@ -448,43 +368,12 @@ class Virus extends Circle {
     super(x, y, "#22ff22", 100, Partition);
   }
 
-  /**
-   * @param {number} bitmask
-   */
-  pack(bitmask) {
-    let result = { type: 1 };
-    if (bitmask & 0b00001) {
-      // x
-      result.x = this.x;
-    }
-    if (bitmask & 0b00010) {
-      // y
-      result.y = this.y;
-    }
-    if (bitmask & 0b00100) {
-      // uuid
-      result.uuid = this.uuid.UUID;
-    }
-    if (bitmask & 0b01000) {
-      // mass
-      result.mass = this.mass;
-    }
-    if (bitmask & 0b10000) {
-      // radius
-      result.radius = this.radius;
-    }
-    return result;
+  pack() {
+    return { type: 1, index: this._Partition.index };
   }
 
-  /**
-   * @param {number} tick
-   */
-  collisionPack(tick) {
-    if (tick !== this.packData) {
-      this.packData.tick = tick;
-      this.packData.data = this.pack(0b11111);
-    }
-    return this.packData.data;
+  get name() {
+    return "virus";
   }
 }
 
@@ -498,43 +387,12 @@ class Mass extends Circle {
     super(x, y, colour, 12, Partition);
   }
 
-  /**
-   * @param {number} bitmask
-   */
-  pack(bitmask) {
-    let result = { type: 3 };
-    if (bitmask & 0b00001) {
-      // x
-      result.x = this.x;
-    }
-    if (bitmask & 0b00010) {
-      // y
-      result.y = this.y;
-    }
-    if (bitmask & 0b00100) {
-      // uuid
-      result.uuid = this.uuid.UUID;
-    }
-    if (bitmask & 0b01000) {
-      // mass
-      result.mass = this.mass;
-    }
-    if (bitmask & 0b10000) {
-      // radius
-      result.radius = this.radius;
-    }
-    return result;
+  pack() {
+    return { type: 3, index: this._Partition.index };
   }
 
-  /**
-   * @param {number} tick
-   */
-  collisionPack(tick) {
-    if (tick !== this.packData) {
-      this.packData.tick = tick;
-      this.packData.data = this.pack(0b11111);
-    }
-    return this.packData.data;
+  get name() {
+    return "mass";
   }
 }
 
@@ -833,20 +691,33 @@ class World {
   async update(DeltaTime, Workers) {
     this.tick = (this.tick + 1) % 2;
     const intersections = findCircleIntersections(Object.values(this.entities));
-    // const intersectionTasks = intersections.map(([larger, smaller]) => {
-    //   return {
-    //     type: 2,
-    //     data: {
-    //       smaller: smaller.collisionPack(this.tick),
-    //       larger: larger.collisionPack(this.tick),
-    //       DeltaTime,
-    //     },
-    //   };
-    // });
-    // await Workers.massAssign(intersectionTasks);
-    this.collisionSim(intersections, DeltaTime);
+    const intersectionTasks = intersections.map(([larger, smaller], index) => {
+      return {
+        type: 2,
+        data: {
+          index,
+          smaller: smaller.pack(),
+          larger: larger.pack(),
+          DeltaTime,
+        },
+      };
+    });
+    /** @type {[number, number, string][]} */
+    const intersectionResult = await Workers.massAssign(intersectionTasks);
+    intersectionResult.forEach(([index, target, effect]) => {
+      const circle = intersections[index][target];
+      switch (effect) {
+        case "kill":
+          const name = circle.name;
+          this.dealloc[name].unshift(circle.kill());
+          delete this.entities[circle.uuid.UUID];
+          delete this[name][circle.uuid.UUID];
+          this.killed.push(circle.uuid);
+      }
+    });
+    // this.collisionSim(intersections, DeltaTime);
 
-    Workers.assignAll({
+    await Workers.assignAll({
       type: 1,
       data: { tick: this.tick, DeltaTime },
     });

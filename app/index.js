@@ -113,7 +113,7 @@ class Workers {
     let waiting = false;
     for (const [index, task] of tasks.entries()) {
       this.assign(task).then((result) => {
-        results.push(result);
+        if (result) results.push(result);
         complete.count++;
         if (waiting) defer.resolve();
         if (complete.loopDone && complete.count == tasks.length)
@@ -138,6 +138,7 @@ class Workers {
     let complete = 0;
     /** @type {{worker:Worker, ready: boolean}[]} */
     const ready = [];
+    const results = [];
 
     while (this.#ready.length > 0) {
       ready.push(this.#ready.pop());
@@ -158,12 +159,13 @@ class Workers {
       const port = [channel.port2];
       res.then((result) => {
         complete++;
-        if (complete > ready.length) defer.resolve();
+        results.push(result);
+        if (complete >= ready.length) defer.resolve();
       });
       worker.worker.postMessage({ task, port }, port);
     }
     await defer.promise;
-    return;
+    return results;
   }
   static get length() {
     return this.#workers.length;
@@ -477,6 +479,7 @@ function colour(hex) {
   return result;
 }
 
+let max = 0;
 /**
  * @param {0|1|2|3} depth
  * @param {Array} tickData
@@ -487,7 +490,10 @@ async function gameTick(depth, tickData, prevTime) {
     const start = Date.now();
     await world.update((Date.now() - prevTime) / 25, Workers);
     const end = Date.now();
-    // console.log(end - start);
+    if (end - start > max) {
+      max = end - start;
+      console.log(max);
+    }
     // Make Tick data
     tickData.push(...(await Promise.all(createData())));
     if (depth == 0) {
@@ -499,11 +505,11 @@ async function gameTick(depth, tickData, prevTime) {
   }
   setTimeout(
     gameTick,
-    25,
-    (depth + 1) % 4,
+    50,
+    (depth + 1) % 2,
     depth == 0 ? [] : tickData,
     Date.now()
   );
 }
 
-setTimeout(gameTick, 25, 0, [], Date.now());
+setTimeout(gameTick, 50, 0, [], Date.now());

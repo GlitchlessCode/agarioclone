@@ -147,6 +147,34 @@ class PlayerInterface extends CircleInterface {
   }
 }
 
+class VirusInterface extends CircleInterface {
+  constructor() {
+    super();
+  }
+
+  get velX() {
+    return this._Partition.data.getFloat32(20);
+  }
+
+  set velX(val) {
+    this._Partition.data.setFloat32(20, val);
+  }
+
+  get velY() {
+    return this._Partition.data.getFloat32(24);
+  }
+
+  set velY(val) {
+    this._Partition.data.setFloat32(24, val);
+  }
+}
+
+class FoodInterface extends CircleInterface {
+  constructor() {
+    super();
+  }
+}
+
 class UserInterface extends EntityInterface {
   constructor() {
     super();
@@ -246,6 +274,9 @@ SharedBufferPartition.massConstruct(
 );
 
 const Player = new PlayerInterface();
+const Player2 = new PlayerInterface();
+const Virus = new VirusInterface();
+const Food = new FoodInterface();
 const User = new UserInterface();
 // * End of Setup
 
@@ -299,7 +330,6 @@ parentPort.on(
           player.mutex.unlock();
         }
         port.postMessage(lockCount);
-        // port[0].postMessage(movePlayer(task.data));
         break;
       case 2:
         port.postMessage(collisionSim(task.data));
@@ -312,7 +342,7 @@ parentPort.on(
  *
  * @param {PlayerInterface} player
  * @param {UserInterface} user
- * @param {numbmer} DeltaTime
+ * @param {number} DeltaTime
  */
 function movePlayer(player, user, DeltaTime) {
   player.mass = Math.max(player.mass * 0.9998, 10);
@@ -327,45 +357,56 @@ function movePlayer(player, user, DeltaTime) {
   const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
   const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
 
-  player.x +=
-    (8 / (player.radius * 10) + 0.13) * user.mouseVector.x * DeltaTime +
-    player.velX +
-    cohereX;
-  player.y +=
-    (8 / (player.radius * 10) + 0.13) * user.mouseVector.y * DeltaTime +
-    player.velY +
-    cohereY;
+  const speed = 8 / (player.radius * 10) + 0.13;
+
+  player.x += speed * user.mouseVector.x * DeltaTime + player.velX + cohereX;
+  player.y += speed * user.mouseVector.y * DeltaTime + player.velY + cohereY;
 
   player.x = clamp(player.x, 0, world.width);
   player.y = clamp(player.y, 0, world.height);
 }
 
-function collisionSim(data) {
-  const { larger, smaller } = data;
+/**
+ * @param {{larger:number, smaller:number, DeltaTime:number, index:number}} param0
+ */
+function collisionSim({ larger, smaller, DeltaTime, index }) {
   // Values both from 0-3; Bitshift larger to the left twice; Composes this: 0b0000LLSS
   const bitmask = (larger.type << 2) + smaller.type;
   switch (bitmask) {
     case 0: // (0<<2 = 0) + 0 = 0
-      return playerPlayer(data);
+      Player.setPartition(PARTITIONS.player[larger.index]);
+      Player2.setPartition(PARTITIONS.player[smaller.index]);
+      return playerPlayer(Player, Player2, DeltaTime, index);
     case 1: // (0<<2 = 0) + 1 = 1
-      return playerVirus(data);
+      return playerVirus(DeltaTime);
     case 2: // (0<<2 = 0) + 2 = 2
-      return playerFood(data);
+      Player.setPartition(PARTITIONS.player[larger.index]);
+      Food.setPartition(PARTITIONS.food[smaller.index]);
+      return playerFood(Player, Food, DeltaTime, index);
     case 3: // (0<<2 = 0) + 3 = 3
-      return playerMass(data);
+      return playerMass(DeltaTime);
     case 7: // (1<<2 = 4) + 3 = 7
-      return virusMass(data);
+      return virusMass(DeltaTime);
   }
 }
 
-function playerPlayer({ larger, smaller, DeltaTime }) {}
+function playerPlayer(larger, smaller, DeltaTime, index) {}
 
-function playerVirus({ larger, smaller, DeltaTime }) {}
+function playerVirus(larger, smaller, DeltaTime, index) {}
 
-function playerFood({ larger, smaller, DeltaTime }) {
-  // console.log("PlayerFood");
+/**
+ * @param {PlayerInterface} larger
+ * @param {FoodInterface} smaller
+ * @param {number} DeltaTime
+ * @param {number} index
+ * @returns {undefined|{}}
+ */
+function playerFood(larger, smaller, DeltaTime, index) {
+  if (!larger.encloses(smaller)) return;
+  larger.mass++;
+  return [index, 1, "kill"];
 }
 
-function playerMass({ larger, smaller, DeltaTime }) {}
+function playerMass(larger, smaller, DeltaTime, index) {}
 
-function virusMass({ larger, smaller, DeltaTime }) {}
+function virusMass(larger, smaller, DeltaTime, index) {}
