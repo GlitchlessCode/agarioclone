@@ -154,13 +154,15 @@ class Entity {
   set y(val) {
     this._Partition.data.setFloat64(8, val);
   }
+
+  kill() {
+    return this._Partition;
+  }
 }
 
 class Circle extends Entity {
   /** @type {string} */
   colour;
-  /** @type {number} */
-  mass;
   /** @type {{tick:number, data:{}}} */
   packData;
   /**
@@ -221,6 +223,14 @@ class Circle extends Entity {
     return 0;
   }
 
+  get mass() {
+    return this._Partition.data.getFloat32(16);
+  }
+
+  set mass(val) {
+    this._Partition.data.setFloat32(16, val);
+  }
+
   get radius() {
     return Math.sqrt(this.mass / Math.PI);
   }
@@ -251,12 +261,6 @@ class Player extends Circle {
   _userID;
   /** @type {Object.<string, Player>} */
   siblings;
-  /** @type {number} */
-  velX;
-  /** @type {number} */
-  velY;
-  /** @type {number} */
-  mergeTimer;
 
   /**
    * @param {number} x
@@ -264,9 +268,10 @@ class Player extends Circle {
    * @param {string} userID
    * @param {SharedBufferPartition} Partition
    */
-  constructor(x, y, userID, Partition) {
+  constructor(x, y, userID, userIndex, Partition) {
     super(x, y, "#00000000", 25, Partition);
     this._userID = userID;
+    this._Partition.data.setUint8(30, userIndex);
     this.velX = 0;
     this.velY = 0;
     this.mergeTimer = 0;
@@ -278,18 +283,53 @@ class Player extends Circle {
 
   /**
    * @param {Vector2} vector
+   * @param {SharedBufferPartition} Partition
    * @returns {Player}
    */
-  split(vector) {
+  split(vector, Partition) {
     this.mass = this.mass / 2;
     this.velX -= vector.x / 6;
     this.velY -= vector.y / 6;
 
-    const newPlayer = new Player(this.x, this.y, this.userID);
+    const newPlayer = new Player(
+      this.x,
+      this.y,
+      this.userID,
+      this.userIndex,
+      Partition
+    );
     newPlayer.velX = vector.x;
     newPlayer.velY = vector.y;
     newPlayer.mass = this.mass;
     return newPlayer;
+  }
+
+  get velX() {
+    return this._Partition.data.getFloat32(20);
+  }
+
+  set velX(val) {
+    this._Partition.data.setFloat32(20, val);
+  }
+
+  get velY() {
+    return this._Partition.data.getFloat32(24);
+  }
+
+  set velY(val) {
+    this._Partition.data.setFloat32(24, val);
+  }
+
+  get mergeTimer() {
+    return this._Partition.data.getUint16(28);
+  }
+
+  set mergeTimer(val) {
+    this._Partition.data.setUint16(28, val);
+  }
+
+  get userIndex() {
+    return this._Partition.data.getUint8(30);
   }
 
   /**
@@ -498,47 +538,7 @@ class Mass extends Circle {
   }
 }
 
-class LocalEntity {
-  /** @type {number} */
-  x;
-  /** @type {number} */
-  y;
-  /** @type {{UUID: string, buff: ArrayBuffer}} */
-  _uuid;
-  /**
-   * @param {number} x
-   * @param {number} y
-   * @param {number} radius
-   * @param {string} [UUID]
-   */
-  constructor(x, y, UUID) {
-    this._uuid = UUID ? UUID : uuid();
-    this.x = x;
-    this.y = y;
-  }
-
-  get uuid() {
-    return this._uuid;
-  }
-
-  /**
-   * @param {Entity} entity
-   */
-  getDistance(entity) {
-    return Math.hypot(this.x - entity.x, this.y - entity.y);
-  }
-
-  /**
-   * @param {Entity} entity
-   */
-  getAngle(entity) {
-    return Math.atan2(entity.y - this.y, entity.x - this.x);
-  }
-}
-
-class User extends LocalEntity {
-  /** @type {{x: number, y:number}} */
-  mouse;
+class User extends Entity {
   /** @type {Object.<string, Player>} */
   players;
   /** @type {World} */
@@ -547,15 +547,19 @@ class User extends LocalEntity {
   scale;
   /** @type {{NAME: string, buff: ArrayBuffer}} */
   name;
+  /** @type {number} */
+  _userIndex;
   /**
    * @param {number} x
    * @param {number} y
    * @param {string} [UUID]
    * @param {World} world
    */
-  constructor(x, y, UUID, world) {
-    super(x, y, UUID);
-    this.mouse = { x: 0, y: 0 };
+  constructor(x, y, UUID, world, userIndex) {
+    super(x, y, world.dealloc.user.shift(), UUID);
+    this.mouse.x = 0;
+    this.mouse.y = 0;
+    this._userIndex = userIndex;
     const ref = this;
     this.scale = 1;
     this.players = new Proxy(
@@ -579,13 +583,20 @@ class User extends LocalEntity {
     this.name = { NAME: name, buff: new TextEncoder().encode(name).buffer };
   }
 
+  get userIndex() {
+    return this._userIndex;
+  }
+
   kill() {
     for (const [uuid, player] of Object.entries(this.players)) {
+      this.world.dealloc.player.unshift(player.kill());
       delete this.world.entities[uuid];
       delete this.world.players[uuid];
       this.world.killed.push(player.uuid);
+      delete this.players[uuid];
     }
     delete this.world.users[this.uuid.UUID];
+    return this._Partition;
   }
 
   get bounds() {
@@ -620,6 +631,24 @@ class User extends LocalEntity {
     return {
       x: Math.sin(angle) * dist,
       y: Math.cos(angle) * dist,
+    };
+  }
+
+  get mouse() {
+    const ref = this;
+    return {
+      get x() {
+        return ref._Partition.data.getFloat32(16);
+      },
+      set x(val) {
+        ref._Partition.data.setFloat32(16, val);
+      },
+      get y() {
+        return ref._Partition.data.getFloat32(20);
+      },
+      set y(val) {
+        ref._Partition.data.setFloat32(20, val);
+      },
     };
   }
 
@@ -666,7 +695,7 @@ class World {
   minFood;
   /** @type {{UUID: string, buff: ArrayBuffer}[]} */
   killed;
-  /** @type {{player: SharedBufferPartition[], virus: SharedBufferPartition[], food: SharedBufferPartition[], mass: SharedBufferPartition[]}} */
+  /** @type {{player: SharedBufferPartition[], virus: SharedBufferPartition[], food: SharedBufferPartition[], mass: SharedBufferPartition[], user: SharedBufferPartition[]}} */
   dealloc;
   /** @type {number} */
   tick;
@@ -681,7 +710,7 @@ class World {
    * @param {bigint} height
    * @param {number} minFood
    * @param {Uint8Array} sharedMemory
-   * @param {{player: Partition, virus: Partition, food: Partition, mass: Partition}} partitionData
+   * @param {{player: Partition, virus: Partition, food: Partition, mass: Partition, user: Partition}} partitionData
    * @param  {...Circle} entities
    */
   constructor(
@@ -697,8 +726,9 @@ class World {
       virus: new Array(),
       food: new Array(),
       mass: new Array(),
+      user: new Array(),
     };
-    const { player, virus, food, mass } = partitionData;
+    const { player, virus, food, mass, user } = partitionData;
     let total = 0;
     // Player Partitioning
     total += SharedBufferPartition.massConstruct(
@@ -725,11 +755,19 @@ class World {
       total
     );
     // Mass Partitioning
-    SharedBufferPartition.massConstruct(
+    total += SharedBufferPartition.massConstruct(
       sharedMemory,
       this.dealloc.mass,
       mass.count,
       mass.size,
+      total
+    );
+    // User Partitioning
+    SharedBufferPartition.massConstruct(
+      sharedMemory,
+      this.dealloc.user,
+      user.count,
+      user.size,
       total
     );
 
@@ -762,13 +800,14 @@ class World {
               element.x,
               element.y,
               element.UUID,
+              element.userIndex,
               this.dealloc.player.shift() // ! Temporary
             )
           );
           return;
         }
 
-        if (!(element instanceof Entity) && !(element instanceof LocalEntity))
+        if (!(element instanceof Entity))
           throw new TypeError("entities[] must be of type Entity");
         else {
           if (element instanceof User) this.users[element.uuid.UUID] = element;
@@ -792,50 +831,58 @@ class World {
    * @param {number} DeltaTime
    */
   async update(DeltaTime, Workers) {
-    this.tick++;
+    this.tick = (this.tick + 1) % 2;
     const intersections = findCircleIntersections(Object.values(this.entities));
-    const intersectionTasks = intersections.map(([larger, smaller]) => {
-      return {
-        type: 2,
-        data: {
-          smaller: smaller.collisionPack(this.tick),
-          larger: larger.collisionPack(this.tick),
-          DeltaTime,
-        },
-      };
-    });
-    await Workers.massAssign(intersectionTasks);
+    // const intersectionTasks = intersections.map(([larger, smaller]) => {
+    //   return {
+    //     type: 2,
+    //     data: {
+    //       smaller: smaller.collisionPack(this.tick),
+    //       larger: larger.collisionPack(this.tick),
+    //       DeltaTime,
+    //     },
+    //   };
+    // });
+    // await Workers.massAssign(intersectionTasks);
     this.collisionSim(intersections, DeltaTime);
 
+    Workers.assignAll({
+      type: 1,
+      data: { tick: this.tick, DeltaTime },
+    });
+
     for (const [uuid, user] of Object.entries(this.users)) {
-      const players = Object.values(user.players);
+      // * Newer
+      // const players = Object.values(user.players);
 
-      const packedUser = user.pack(0b1111);
-      const packedWorld = { width: this.width, height: this.height };
-      const moveTasks = players.map((player) => {
-        return {
-          type: 1,
-          data: {
-            player: player.pack(0b001111111),
-            user: packedUser,
-            world: packedWorld,
-            DeltaTime,
-          },
-        };
-      });
+      // const packedUser = user.pack(0b1111);
+      // const packedWorld = { width: this.width, height: this.height };
+      // const moveTasks = players.map((player) => {
+      //   return {
+      //     type: 1,
+      //     data: {
+      //       player: player.pack(0b001111111),
+      //       user: packedUser,
+      //       world: packedWorld,
+      //       DeltaTime,
+      //     },
+      //   };
+      // });
 
-      const result = await Workers.massAssign(moveTasks);
+      // const result = await Workers.massAssign(moveTasks);
 
-      result.forEach(
-        /** @param {PseudoPlayer} result */
-        (result) => {
-          user.players[result.uuid].x = result.x;
-          user.players[result.uuid].y = result.y;
-          user.players[result.uuid].mass = result.mass;
-          user.players[result.uuid].velX = result.velX;
-          user.players[result.uuid].velY = result.velY;
-        }
-      );
+      // result.forEach(
+      //   /** @param {PseudoPlayer} result */
+      //   (result) => {
+      //     user.players[result.uuid].x = result.x;
+      //     user.players[result.uuid].y = result.y;
+      //     user.players[result.uuid].mass = result.mass;
+      //     user.players[result.uuid].velX = result.velX;
+      //     user.players[result.uuid].velY = result.velY;
+      //   }
+      // );
+
+      // ! Original
       // players.forEach((player) => {
       //   player.mass = Math.max(player.mass * 0.9998, 10);
 
@@ -888,7 +935,7 @@ class World {
               new Food(
                 Math.random() * this.width,
                 Math.random() * this.height,
-                this.dealloc.food.shift()
+                this.dealloc.food.shift() // ! Temporary
               )
           )
         );
@@ -906,6 +953,7 @@ class World {
       if (larger instanceof Player && smaller instanceof Food) {
         if (!larger.encloses(smaller)) return;
         larger.mass++;
+        this.dealloc.food.unshift(smaller.kill());
         delete this.entities[smaller.uuid.UUID];
         delete this.food[smaller.uuid.UUID];
         this.killed.push(smaller.uuid);
@@ -951,6 +999,12 @@ class World {
   get height() {
     return parseInt(this.#height);
   }
+
+  get newUserIndex() {
+    if (this.dealloc.user.length == 0)
+      throw new Error("Cannot have more than 255 users");
+    return this.dealloc.user[0].index;
+  }
 }
 
 /**
@@ -985,10 +1039,18 @@ class PlayerParams {
   x;
   y;
   UUID;
-  constructor(x, y, UUID) {
+  userIndex;
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {string} UUID
+   * @param {number} userIndex
+   */
+  constructor(x, y, UUID, userIndex) {
     this.x = x;
     this.y = y;
     this.UUID = UUID;
+    this.userIndex = userIndex;
   }
 }
 
@@ -1006,4 +1068,5 @@ module.exports = {
     Mass,
     User,
   },
+  Player,
 };

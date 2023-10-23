@@ -230,6 +230,7 @@ class World {
           pseudoEntity.name,
           pseudoEntity.uuid,
         ];
+        console.log(pseudoEntity.name);
         switch (pseudoEntity.type) {
           case 0:
             entities.push(new Player(...params));

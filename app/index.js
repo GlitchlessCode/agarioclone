@@ -2,24 +2,178 @@
 const express = require("express");
 const ws = require("ws");
 const path = require("path");
-const { World, Entities, uuid, clamp, getType } = require("./agarServer");
-const { Workers, Deferred } = require("./modules/workers");
 const {
+  World,
+  Entities,
+  uuid,
+  clamp,
+  getType,
+  Player,
+} = require("./agarServer");
+const { SHARED_MEMORY_PARTITIONS } = require("./modules/sharedArrayBuffer");
+const { availableParallelism } = require("os");
+const { Worker } = require("worker_threads");
+
+const TOTAL_MEMORY_SIZE = Object.values(SHARED_MEMORY_PARTITIONS)
+  .map(({ count, size }) => count * size)
+  .reduce((prev, curr) => {
+    return prev + curr;
+  }, 0);
+const SHARED_MEMORY = new Uint8Array(new SharedArrayBuffer(TOTAL_MEMORY_SIZE));
+
+const worldParams = [
+  350n,
+  350n,
+  SHARED_MEMORY_PARTITIONS.food.count,
   SHARED_MEMORY,
   SHARED_MEMORY_PARTITIONS,
-} = require("./modules/sharedArrayBuffer");
+  // new Entities.Virus(175, 175)
+];
+
+class Deferred {
+  /** @type {function} */
+  resolve;
+  /** @type {function} */
+  reject;
+
+  /**@type {Promise} */
+  promise;
+  constructor() {
+    this.promise = new Promise((resolve, reject) => {
+      this.reject = reject;
+      this.resolve = resolve;
+    });
+  }
+}
+
+class Workers {
+  /** @type {{worker: Worker, ready: boolean}[]} */
+  static #workers;
+  /** @type {{worker: Worker, ready: boolean}[]} */
+  static #ready;
+  static {
+    this.#workers = Array.from(
+      { length: Math.ceil(availableParallelism / 2) },
+      () => {
+        const worker = new Worker(
+          path.join(__dirname, "./modules/agarWorker.js"),
+          {
+            workerData: {
+              buff: SHARED_MEMORY.buffer,
+              world: worldParams.slice(0, 2),
+            },
+          }
+        );
+        return {
+          worker,
+          ready: true,
+        };
+      }
+    );
+    this.#ready = [...this.#workers];
+  }
+
+  /**
+   * @typedef {Object} task
+   * @property {number} type
+   * @property {any} data
+   */
+
+  /**
+   * @param {task} task
+   */
+  static assign(task) {
+    const channel = new MessageChannel();
+    const worker = this.#ready.pop();
+    worker.ready = false;
+
+    const res = new Promise((resolve) => {
+      channel.port1.once("message", (result) => {
+        resolve(result);
+        worker.ready = true;
+        this.#ready.push(worker);
+      });
+    });
+
+    const port = [channel.port2];
+    worker.worker.postMessage({ task, port }, port);
+    return res;
+  }
+
+  /**
+   * @param  {...task} input
+   */
+  static async massAssign(...input) {
+    let tasks =
+      input.length == 1 && input[0] instanceof Array ? input[0] : input;
+    if (tasks.length == 0) return [];
+    let results = [];
+    let complete = { count: 0, defer: new Deferred(), loopDone: false };
+    let defer = new Deferred();
+    let waiting = false;
+    for (const [index, task] of tasks.entries()) {
+      this.assign(task).then((result) => {
+        results.push(result);
+        complete.count++;
+        if (waiting) defer.resolve();
+        if (complete.loopDone && complete.count == tasks.length)
+          complete.defer.resolve();
+      });
+      if (this.#ready.length == 0 && index < tasks.length - 1) {
+        waiting = true;
+        await defer.promise;
+        defer = new Deferred();
+        waiting = false;
+      }
+    }
+    complete.loopDone = true;
+    await complete.defer.promise;
+    return results;
+  }
+  /**
+   * @param {task} task
+   */
+  static async assignAll(task) {
+    const defer = new Deferred();
+    let complete = 0;
+    /** @type {{worker:Worker, ready: boolean}[]} */
+    const ready = [];
+
+    while (this.#ready.length > 0) {
+      ready.push(this.#ready.pop());
+    }
+
+    for (const [i, worker] of ready.entries()) {
+      const channel = new MessageChannel();
+      worker.ready = false;
+
+      const res = new Promise((resolve) => {
+        channel.port1.once("message", (result) => {
+          resolve(result);
+          worker.ready = true;
+          this.#ready.push(worker);
+        });
+      });
+
+      const port = [channel.port2];
+      res.then((result) => {
+        complete++;
+        if (complete > ready.length) defer.resolve();
+      });
+      worker.worker.postMessage({ task, port }, port);
+    }
+    await defer.promise;
+    return;
+  }
+  static get length() {
+    return this.#workers.length;
+  }
+}
 
 const app = express();
 const clients = {};
 
-const world = new World(
-  350n,
-  350n,
-  1024,
-  SHARED_MEMORY,
-  SHARED_MEMORY_PARTITIONS
-  // new Entities.Virus(175, 175)
-);
+const world = new World(...worldParams);
 world.update(0, Workers);
 
 let first = true;
@@ -42,13 +196,14 @@ wsServer.on("connection", async function (ws, req) {
     x: Math.random() * world.width,
     y: Math.random() * world.height,
   };
+  const index = world.newUserIndex;
   world.addEntities(
-    new Entities.User(rand.x, rand.y, UUID, world),
-    new Entities.Player(rand.x, rand.y, UUID.UUID)
+    new Entities.User(rand.x, rand.y, UUID, world, index),
+    new Entities.Player(rand.x, rand.y, UUID.UUID, index)
   );
   ws.on("close", function (code, reason) {
     delete clients[this.id.UUID];
-    world.users[this.id.UUID].kill();
+    world.dealloc.user.unshift(world.users[this.id.UUID].kill());
     console.log("Connection Closed!");
   });
   ws.on("message", parseMessage);
@@ -56,6 +211,7 @@ wsServer.on("connection", async function (ws, req) {
   ws.send(await createMessage(0));
 
   if (first) {
+    // ! TEMPORARY
     first = false;
     Object.values(world.players)[0].mass += 350;
   }
@@ -187,7 +343,7 @@ async function fetchWorld() {
     infoView.setUint8(21, colourValue[1]);
     infoView.setUint8(22, colourValue[2]);
 
-    if (entity instanceof Entities.Player) {
+    if (entity instanceof Player) {
       const user = world.users[entity.userID];
       const nameLength = user.name.buff.byteLength;
       infoView.setUint8(23, nameLength);
@@ -228,7 +384,12 @@ function handleKey(keypress) {
         if (player.mass > 34 && Object.values(user.players).length < 16) {
           const { x, y } = user.mouseVector;
           const mult = player.radius / 1.5;
-          world.addEntities(player.split({ x: x * mult, y: y * mult }));
+          world.addEntities(
+            player.split(
+              { x: x * mult, y: y * mult },
+              world.dealloc.player.shift()
+            )
+          );
         }
       }
       break;
@@ -266,38 +427,40 @@ function* sendTick(tickData, killed) {
 }
 
 function* createData() {
-  for (const [uuid, entity] of Object.entries(world.entities).filter(
-    (a) => a[1].different
-  )) {
-    if (entity.different)
-      yield new Promise(async function (resolve, reject) {
-        try {
-          const infoView = new DataView(new ArrayBuffer(24));
-          const colourValue = colour(entity.colour);
+  for (const [uuid, entity] of Object.entries(world.entities).filter((a) => {
+    if (a[1] instanceof Player) {
+      return true;
+    }
+    return a[1].different;
+  })) {
+    yield new Promise(async function (resolve, reject) {
+      try {
+        const infoView = new DataView(new ArrayBuffer(24));
+        const colourValue = colour(entity.colour);
 
-          let params = [new Uint8Array([getType(entity)]), infoView.buffer];
-          infoView.setFloat64(0, entity.x);
-          infoView.setFloat64(8, entity.y);
-          infoView.setFloat32(16, entity.radius);
-          infoView.setUint8(20, colourValue[0]);
-          infoView.setUint8(21, colourValue[1]);
-          infoView.setUint8(22, colourValue[2]);
+        let params = [new Uint8Array([getType(entity)]), infoView.buffer];
+        infoView.setFloat64(0, entity.x);
+        infoView.setFloat64(8, entity.y);
+        infoView.setFloat32(16, entity.radius);
+        infoView.setUint8(20, colourValue[0]);
+        infoView.setUint8(21, colourValue[1]);
+        infoView.setUint8(22, colourValue[2]);
 
-          if (entity instanceof Entities.Player) {
-            const user = world.users[entity.userID];
-            const nameLength = user.name.buff.byteLength;
-            infoView.setUint8(23, nameLength);
-            params.push(user.name.buff);
-          }
-
-          params.push(entity.uuid.buff);
-
-          const data = await new Blob(params).arrayBuffer();
-          resolve(data);
-        } catch (error) {
-          resolve(await new Blob([new Uint8Array([])]).arrayBuffer());
+        if (entity instanceof Player) {
+          const user = world.users[entity.userID];
+          const nameLength = user.name.buff.byteLength;
+          infoView.setUint8(23, nameLength);
+          params.push(user.name.buff);
         }
-      });
+
+        params.push(entity.uuid.buff);
+
+        const data = await new Blob(params).arrayBuffer();
+        resolve(data);
+      } catch (error) {
+        resolve(await new Blob([new Uint8Array([])]).arrayBuffer());
+      }
+    });
   }
 }
 
@@ -324,7 +487,7 @@ async function gameTick(depth, tickData, prevTime) {
     const start = Date.now();
     await world.update((Date.now() - prevTime) / 25, Workers);
     const end = Date.now();
-    console.log(end - start);
+    // console.log(end - start);
     // Make Tick data
     tickData.push(...(await Promise.all(createData())));
     if (depth == 0) {

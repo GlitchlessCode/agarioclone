@@ -16,15 +16,9 @@ const SHARED_MEMORY_PARTITIONS = {
   virus: { count: 64, size: 32 },
   food: { count: 1024, size: 24 },
   mass: { count: 512, size: 32 },
+  user: { count: 256, size: 32 },
 };
-const TOTAL_MEMORY_SIZE = Object.values(SHARED_MEMORY_PARTITIONS)
-  .map(({ count, size }) => count * size)
-  .reduce((prev, curr) => {
-    return prev + curr;
-  }, 0);
-const SHARED_MEMORY = new Uint8Array(new SharedArrayBuffer(TOTAL_MEMORY_SIZE));
 
 module.exports = {
   SHARED_MEMORY_PARTITIONS,
-  SHARED_MEMORY,
 };

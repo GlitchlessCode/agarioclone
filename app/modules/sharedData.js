@@ -54,29 +54,24 @@ class Mutex {
 
   /**
    * locks the Mutex if unlocked, else, throws MutexError
-   * @returns {void}
+   * @returns {boolean}
    */
   lock() {
-    if (this.#lockAcquired)
-      throw new MutexError("lock failed because this Mutex already has lock");
+    if (this.#lockAcquired) return false;
 
     const [resource, cell] = [this.#resource, this.#cell];
-    if (Atomics.load(resource, cell) > 0)
-      throw new MutexError(
-        "lock failed because another Mutex already has lock"
-      );
+    if (Atomics.load(resource, cell) > 0) return false;
 
     const countOfAcquiresBeforeMe = Atomics.add(resource, cell, 1);
 
     // someone was faster than me, throw error
     if (countOfAcquiresBeforeMe >= 1) {
       Atomics.sub(resource, cell, 1);
-      throw new MutexError(
-        "lock failed because another Mutex already has lock"
-      );
+      return false;
     }
 
     this.#lockAcquired = true;
+    return true;
   }
 
   /**
@@ -142,4 +137,5 @@ class SharedBufferPartition {
 
 module.exports = {
   SharedBufferPartition,
+  MutexError,
 };
