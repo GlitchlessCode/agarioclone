@@ -384,6 +384,7 @@ function handleKey(keypress) {
       if (Object.values(user.players).length >= 16) break;
       for (const player of Object.values(user.players)) {
         if (player.mass > 34 && Object.values(user.players).length < 16) {
+          player._Partition.mutex.lockWait();
           const { x, y } = user.mouseVector;
           const mult = player.radius / 1.5;
           world.addEntities(
@@ -392,6 +393,7 @@ function handleKey(keypress) {
               world.dealloc.player.shift()
             )
           );
+          player._Partition.mutex.unlock();
         }
       }
       break;

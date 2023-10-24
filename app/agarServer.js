@@ -23,14 +23,6 @@ function clamp(value, min = 0, max = 1) {
 }
 
 /**
- * @param {Array} arr
- * @returns {number}
- */
-function arrAverage(arr) {
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
-}
-
-/**
  * @param {string} str
  * @returns {string}
  */
@@ -780,7 +772,6 @@ class World {
       //   player.x = clamp(player.x, 0, this.width);
       //   player.y = clamp(player.y, 0, this.height);
       // });
-
       user.x = (user.bounds.left + user.bounds.right) / 2;
       user.y = (user.bounds.top + user.bounds.bottom) / 2;
 

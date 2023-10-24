@@ -338,6 +338,8 @@ parentPort.on(
   }
 );
 
+let NAN = false;
+
 /**
  *
  * @param {PlayerInterface} player
@@ -456,20 +458,29 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
   // TODO: Add Eating & Merge Timer
   if (larger.userIndex == smaller.userIndex) {
     // * User is the same
-    const separation = getForce(
-      1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
-      larger.radius
-    );
     if (
-      separation > Number.MAX_SAFE_INTEGER ||
-      separation < Number.MIN_SAFE_INTEGER
-    )
-      return;
-    const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-    smaller.velX += Math.cos(angle) * separation * DeltaTime;
-    smaller.velY += Math.sin(angle) * separation * DeltaTime;
-    larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
-    larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
+      larger.mass < smaller.mass * 1.1 ||
+      larger.mergeTimer ||
+      smaller.mergeTimer
+    ) {
+      // * Cannot Merge
+      const separation = getForce(
+        1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
+        larger.radius
+      );
+      if (
+        separation > Number.MAX_SAFE_INTEGER ||
+        separation < Number.MIN_SAFE_INTEGER
+      )
+        return;
+      const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
+      smaller.velX += Math.cos(angle) * separation * DeltaTime;
+      smaller.velY += Math.sin(angle) * separation * DeltaTime;
+      larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
+      larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
+    } else {
+      // * Can Merge
+    }
   } else {
     // * User is different
     console.log(larger.getOverlap(smaller) / smaller.mass);
