@@ -367,30 +367,114 @@ function movePlayer(player, user, DeltaTime) {
 }
 
 /**
- * @param {{larger:number, smaller:number, DeltaTime:number, index:number}} param0
+ * @param {number} indexA
+ * @param {SharedBufferPartition} partitionA
+ * @param {number} indexB
+ * @param {SharedBufferPartition} partitionB
+ */
+function duoLock(indexA, partitionA, indexB, partitionB) {
+  if (indexA < indexB) {
+    partitionA.mutex.lockWait();
+    partitionB.mutex.lockWait();
+  } else {
+    partitionB.mutex.lockWait();
+    partitionA.mutex.lockWait();
+  }
+}
+
+/**
+ * @param {{larger:{type:number, index:number}, smaller:{type:number, index:number}, DeltaTime:number, index:number}} param0
  */
 function collisionSim({ larger, smaller, DeltaTime, index }) {
   // Values both from 0-3; Bitshift larger to the left twice; Composes this: 0b0000LLSS
   const bitmask = (larger.type << 2) + smaller.type;
   switch (bitmask) {
-    case 0: // (0<<2 = 0) + 0 = 0
-      Player.setPartition(PARTITIONS.player[larger.index]);
-      Player2.setPartition(PARTITIONS.player[smaller.index]);
-      return playerPlayer(Player, Player2, DeltaTime, index);
-    case 1: // (0<<2 = 0) + 1 = 1
+    case 0: {
+      // (0<<2 = 0) + 0 = 0
+      const partitionA = PARTITIONS.player[larger.index];
+      const partitionB = PARTITIONS.player[smaller.index];
+
+      duoLock(larger.index, partitionA, smaller.index, partitionB);
+
+      Player.setPartition(partitionA);
+      Player2.setPartition(partitionB);
+
+      const result = playerPlayer(Player, Player2, DeltaTime, index);
+
+      partitionA.mutex.unlock();
+      partitionB.mutex.unlock();
+
+      return result;
+    }
+    case 1: {
+      // (0<<2 = 0) + 1 = 1
       return playerVirus(DeltaTime);
-    case 2: // (0<<2 = 0) + 2 = 2
-      Player.setPartition(PARTITIONS.player[larger.index]);
-      Food.setPartition(PARTITIONS.food[smaller.index]);
-      return playerFood(Player, Food, DeltaTime, index);
-    case 3: // (0<<2 = 0) + 3 = 3
+    }
+    case 2: {
+      // (0<<2 = 0) + 2 = 2
+      const partitionA = PARTITIONS.player[larger.index];
+      const partitionB = PARTITIONS.food[smaller.index];
+
+      duoLock(larger.index, partitionA, smaller.index + 4160, partitionB);
+
+      Player.setPartition(partitionA);
+      Food.setPartition(partitionB);
+
+      const result = playerFood(Player, Food, DeltaTime, index);
+
+      partitionA.mutex.unlock();
+      partitionB.mutex.unlock();
+
+      return result;
+    }
+    case 3: {
+      // (0<<2 = 0) + 3 = 3
       return playerMass(DeltaTime);
-    case 7: // (1<<2 = 4) + 3 = 7
+    }
+    case 7: {
+      // (1<<2 = 4) + 3 = 7
       return virusMass(DeltaTime);
+    }
   }
 }
 
-function playerPlayer(larger, smaller, DeltaTime, index) {}
+function getForce(percent, radius) {
+  return -Math.min(
+    0.1 * radius,
+    Math.max(0.005, 0.1 * radius * Math.log10(8 * percent))
+  );
+}
+
+/**
+ * @param {PlayerInterface} larger
+ * @param {PlayerInterface} smaller
+ * @param {number} DeltaTime
+ * @param {number} index
+ * @returns
+ */
+function playerPlayer(larger, smaller, DeltaTime, index) {
+  // TODO: Add Eating & Merge Timer
+  if (larger.userIndex == smaller.userIndex) {
+    // * User is the same
+    const separation = getForce(
+      1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
+      larger.radius
+    );
+    if (
+      separation > Number.MAX_SAFE_INTEGER ||
+      separation < Number.MIN_SAFE_INTEGER
+    )
+      return;
+    const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
+    smaller.velX += Math.cos(angle) * separation * DeltaTime;
+    smaller.velY += Math.sin(angle) * separation * DeltaTime;
+    larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
+    larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
+  } else {
+    // * User is different
+    console.log(larger.getOverlap(smaller) / smaller.mass);
+  }
+}
 
 function playerVirus(larger, smaller, DeltaTime, index) {}
 
@@ -399,7 +483,7 @@ function playerVirus(larger, smaller, DeltaTime, index) {}
  * @param {FoodInterface} smaller
  * @param {number} DeltaTime
  * @param {number} index
- * @returns {undefined|{}}
+ * @returns {undefined|[number, number, string]}
  */
 function playerFood(larger, smaller, DeltaTime, index) {
   if (!larger.encloses(smaller)) return;

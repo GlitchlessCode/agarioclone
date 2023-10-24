@@ -39,7 +39,7 @@ class Mutex {
     while (true) {
       // lock is already acquired, wait
       if (Atomics.load(resource, cell) > 0) {
-        while ("ok" !== Atomics.wait(resource, cell, 0));
+        while (Atomics.load(resource, cell) > 0);
       }
       const countOfAcquiresBeforeMe = Atomics.add(resource, cell, 1);
       // someone was faster than me, try again later

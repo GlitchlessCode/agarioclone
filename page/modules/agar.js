@@ -2,6 +2,27 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+/**
+ * @param {string} hex
+ * @param {number} val
+ */
+function shade(hex, val) {
+  const r = parseInt(hex.slice(1, 3), 16),
+    g = parseInt(hex.slice(3, 5), 16),
+    b = parseInt(hex.slice(5, 7), 16);
+
+  const rMod = clamp(r + val, 0, 255),
+    gMod = clamp(g + val, 0, 255),
+    bMod = clamp(b + val, 0, 255);
+
+  return (
+    "#" +
+    rMod.toString(16).padStart(2, 0) +
+    gMod.toString(16).padStart(2, 0) +
+    bMod.toString(16).padStart(2, 0)
+  );
+}
+
 class Entity {
   /** @type {number} */
   #trueX;
@@ -27,13 +48,18 @@ class Entity {
   #colour;
   /** @type {string} */
   #name;
+  /** @type {number} */
+  #type;
   /**
    * @param {number} x
    * @param {number} y
    * @param {number} radius
+   * @param {string} colour
+   * @param {string} name
+   * @param {number} type
    * @param {string} uuid
    */
-  constructor(x, y, radius, colour, name, uuid) {
+  constructor(x, y, radius, colour, name, type, uuid) {
     this.#uuid = uuid;
     this.#colour = colour;
     this.#name = name;
@@ -46,6 +72,7 @@ class Entity {
     this.#trueRadius = radius;
     this.#prevRadius = radius;
     this.#currRadius = radius;
+    this.#type = type;
   }
 
   get uuid() {
@@ -101,6 +128,7 @@ class Entity {
       r: this.radius,
       c: this.colour,
       n: this.name,
+      t: this.#type,
     };
   }
 }
@@ -110,10 +138,12 @@ class Player extends Entity {
    * @param {number} x
    * @param {number} y
    * @param {number} radius
+   * @param {string} colour
+   * @param {string} name
    * @param {string} uuid
    */
   constructor(x, y, radius, colour, name, uuid) {
-    super(x, y, radius, colour, name, uuid);
+    super(x, y, radius, colour, name, 0, uuid);
   }
 }
 
@@ -122,10 +152,12 @@ class Food extends Entity {
    * @param {number} x
    * @param {number} y
    * @param {number} radius
+   * @param {string} colour
+   * @param {string} name
    * @param {string} uuid
    */
   constructor(x, y, radius, colour, name, uuid) {
-    super(x, y, radius, colour, name, uuid);
+    super(x, y, radius, colour, name, 2, uuid);
   }
 }
 
@@ -134,10 +166,12 @@ class Virus extends Entity {
    * @param {number} x
    * @param {number} y
    * @param {number} radius
+   * @param {string} colour
+   * @param {string} name
    * @param {string} uuid
    */
   constructor(x, y, radius, colour, name, uuid) {
-    super(x, y, radius, colour, name, uuid);
+    super(x, y, radius, colour, name, 1, uuid);
   }
 }
 
@@ -146,10 +180,12 @@ class Mass extends Entity {
    * @param {number} x
    * @param {number} y
    * @param {number} radius
+   * @param {string} colour
+   * @param {string} name
    * @param {string} uuid
    */
   constructor(x, y, radius, colour, name, uuid) {
-    super(x, y, radius, colour, name, uuid);
+    super(x, y, radius, colour, name, 3, uuid);
   }
 }
 
@@ -191,7 +227,7 @@ class World {
   }
 
   draw() {
-    /** @type {Array.<{x:number, y:number, r:number, c:string, n:string}>}*/
+    /** @type {Array.<{x:number, y:number, r:number, c:string, n:string, t: number}>}*/
     const result = new Array();
     for (const [key, entity] of Object.entries(this.#entities)) {
       if (entity instanceof Entity) result.push(entity.draw());
@@ -230,7 +266,6 @@ class World {
           pseudoEntity.name,
           pseudoEntity.uuid,
         ];
-        console.log(pseudoEntity.name);
         switch (pseudoEntity.type) {
           case 0:
             entities.push(new Player(...params));
@@ -367,7 +402,7 @@ class Camera {
       drawArray.sort((a, b) => {
         return a.r - b.r;
       });
-      drawArray.forEach(({ x, y, r, c, n }) => {
+      drawArray.forEach(({ x, y, r, c, n, t }) => {
         this.ctx.fillStyle = c;
         this.ctx.beginPath();
         this.ctx.arc(
@@ -378,6 +413,19 @@ class Camera {
           Math.PI * 2
         );
         this.ctx.fill();
+
+        if (t == 0) {
+          this.ctx.fillStyle = shade(c, -40);
+          this.ctx.beginPath();
+          this.ctx.arc(
+            this.cnv.width / 2 - this.x * scale + x * scale,
+            this.cnv.height / 2 - this.y * scale + y * scale,
+            r * scale * 0.98 - 0.12 * scale,
+            0,
+            Math.PI * 2
+          );
+          this.ctx.fill();
+        }
 
         this.ctx.fillStyle = "#eeeeee";
         this.ctx.strokeStyle = "#111111";
