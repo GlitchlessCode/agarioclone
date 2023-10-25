@@ -487,9 +487,9 @@ let max = 0;
  * @param {Array} tickData
  */
 async function gameTick(depth, tickData, prevTime) {
+  const start = Date.now();
   if (wsServer.clients.size !== 0) {
     // Update World
-    const start = Date.now();
     await world.update((Date.now() - prevTime) / 25, Workers);
     const end = Date.now();
     if (end - start > max) {
@@ -505,13 +505,7 @@ async function gameTick(depth, tickData, prevTime) {
     }
     world.reset();
   }
-  setTimeout(
-    gameTick,
-    50,
-    (depth + 1) % 2,
-    depth == 0 ? [] : tickData,
-    Date.now()
-  );
+  setTimeout(gameTick, 50, (depth + 1) % 2, depth == 0 ? [] : tickData, start);
 }
 
 setTimeout(gameTick, 50, 0, [], Date.now());

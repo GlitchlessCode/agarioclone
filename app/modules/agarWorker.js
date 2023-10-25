@@ -325,7 +325,7 @@ parentPort.on(
 
             Player.setPartition(player);
             User.setPartition(PARTITIONS.user[Player.userIndex]);
-            movePlayer(Player, User, task.data.DeltaTime);
+            updatePlayer(Player, User, task.data.DeltaTime);
           }
           player.mutex.unlock();
         }
@@ -338,23 +338,28 @@ parentPort.on(
   }
 );
 
-let NAN = false;
-
 /**
  *
  * @param {PlayerInterface} player
  * @param {UserInterface} user
  * @param {number} DeltaTime
  */
-function movePlayer(player, user, DeltaTime) {
+function updatePlayer(player, user, DeltaTime) {
   player.mass = Math.max(player.mass * 0.9998, 10);
+  if (player.mergeTimer)
+    player.mergeTimer = clamp(
+      player.mergeTimer - DeltaTime * 25,
+      0,
+      Number.MAX_SAFE_INTEGER
+    );
 
   player.velX = player.velX * 0.9 ** DeltaTime;
   player.velY = player.velY * 0.9 ** DeltaTime;
 
   const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
   const cohesionStrength =
-    0.01 * player.getDistance(user) ** (0.1 * player.getDistance(user) + 0.5);
+    0.01 * player.getDistance(user) ** (0.1 * player.getDistance(user) + 0.5) +
+    0.1;
 
   const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
   const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
@@ -441,10 +446,7 @@ function collisionSim({ larger, smaller, DeltaTime, index }) {
 }
 
 function getForce(percent, radius) {
-  return -Math.min(
-    0.1 * radius,
-    Math.max(0.005, 0.1 * radius * Math.log10(8 * percent))
-  );
+  return -Math.max(0.025, radius ** percent - 1) * 0.2;
 }
 
 /**
@@ -456,34 +458,33 @@ function getForce(percent, radius) {
  */
 function playerPlayer(larger, smaller, DeltaTime, index) {
   // TODO: Add Eating & Merge Timer
-  if (larger.userIndex == smaller.userIndex) {
-    // * User is the same
+  if (
+    (larger.userIndex == smaller.userIndex &&
+      larger.mass < smaller.mass * 1.1) ||
+    larger.mergeTimer ||
+    smaller.mergeTimer
+  ) {
+    // * User is the same And Cannot Merge
+    const separation = getForce(
+      larger.getOverlap(smaller) / smaller.mass,
+      larger.radius
+    );
     if (
-      larger.mass < smaller.mass * 1.1 ||
-      larger.mergeTimer ||
-      smaller.mergeTimer
-    ) {
-      // * Cannot Merge
-      const separation = getForce(
-        1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
-        larger.radius
-      );
-      if (
-        separation > Number.MAX_SAFE_INTEGER ||
-        separation < Number.MIN_SAFE_INTEGER
-      )
-        return;
-      const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-      smaller.velX += Math.cos(angle) * separation * DeltaTime;
-      smaller.velY += Math.sin(angle) * separation * DeltaTime;
-      larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
-      larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
-    } else {
-      // * Can Merge
-    }
+      separation > Number.MAX_SAFE_INTEGER ||
+      separation < Number.MIN_SAFE_INTEGER
+    )
+      return;
+    const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
+    smaller.velX += Math.cos(angle) * separation * DeltaTime;
+    smaller.velY += Math.sin(angle) * separation * DeltaTime;
+    larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
+    larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
   } else {
-    // * User is different
-    console.log(larger.getOverlap(smaller) / smaller.mass);
+    // * User is different or can Merge\
+    const overlap = larger.getOverlap(smaller) / smaller.mass;
+    if (overlap > 0.75) {
+      return [index, 0, "eat_other", overlap];
+    }
   }
 }
 

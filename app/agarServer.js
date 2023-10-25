@@ -280,6 +280,8 @@ class Player extends Circle {
     this.mass = this.mass / 2;
     this.velX -= vector.x / 6;
     this.velY -= vector.y / 6;
+    const timer = 30000 + Math.floor(0.02333333333 * this.mass) * 1000;
+    this.mergeTimer = timer;
 
     const newPlayer = new Player(
       this.x,
@@ -291,6 +293,7 @@ class Player extends Circle {
     newPlayer.velX = vector.x;
     newPlayer.velY = vector.y;
     newPlayer.mass = this.mass;
+    newPlayer.mergeTimer = timer;
     return newPlayer;
   }
 
@@ -694,20 +697,56 @@ class World {
         },
       };
     });
-    /** @type {[number, number, string][]} */
+
+    /** @type {[number, number, string, ?number][]} */
     const intersectionResult = await Workers.massAssign(intersectionTasks);
-    intersectionResult.forEach(([index, target, effect]) => {
+
+    /** @type {Object.<string,{target: Player, eaters: {circle: Player, percent: number}[]}>} */
+    const merges = {};
+    /** @type {string[]} */
+    const eaters = [];
+
+    intersectionResult.forEach(([index, target, effect, extra]) => {
       const circle = intersections[index][target];
       switch (effect) {
-        case "kill":
+        case "kill": {
           const name = circle.name;
           this.dealloc[name].unshift(circle.kill());
           delete this.entities[circle.uuid.UUID];
           delete this[name][circle.uuid.UUID];
           this.killed.push(circle.uuid);
+          break;
+        }
+        case "eat_other": {
+          const other = intersections[index][(target + 1) % 2];
+          if (Object.hasOwn(merges, other.uuid.UUID)) {
+            merges[other.uuid.UUID].eaters.push(circle);
+          } else {
+            merges[other.uuid.UUID] = {
+              target: other,
+              eaters: [{ circle, percent: extra }],
+            };
+          }
+          eaters.push(circle.uuid.UUID);
+          break;
+        }
       }
     });
-    // this.collisionSim(intersections, DeltaTime);
+
+    Object.values(merges)
+      .sort((a, b) => a.target.mass - b.target.mass)
+      .forEach((merger) => {
+        merger.eaters
+          .filter((ref) => eaters.includes(ref.circle.uuid.UUID))
+          .sort((a, b) => a.percent - b.percent)
+          .pop().circle.mass += merger.target.mass;
+
+        this.dealloc.player.unshift(merger.target.kill());
+        delete this.entities[merger.target.uuid.UUID];
+        delete this.players[merger.target.uuid.UUID];
+        delete merger.target.siblings[merger.target.uuid.UUID];
+        this.killed.push(merger.target.uuid);
+      });
 
     await Workers.assignAll({
       type: 1,
@@ -715,63 +754,6 @@ class World {
     });
 
     for (const [uuid, user] of Object.entries(this.users)) {
-      // * Newer
-      // const players = Object.values(user.players);
-
-      // const packedUser = user.pack(0b1111);
-      // const packedWorld = { width: this.width, height: this.height };
-      // const moveTasks = players.map((player) => {
-      //   return {
-      //     type: 1,
-      //     data: {
-      //       player: player.pack(0b001111111),
-      //       user: packedUser,
-      //       world: packedWorld,
-      //       DeltaTime,
-      //     },
-      //   };
-      // });
-
-      // const result = await Workers.massAssign(moveTasks);
-
-      // result.forEach(
-      //   /** @param {PseudoPlayer} result */
-      //   (result) => {
-      //     user.players[result.uuid].x = result.x;
-      //     user.players[result.uuid].y = result.y;
-      //     user.players[result.uuid].mass = result.mass;
-      //     user.players[result.uuid].velX = result.velX;
-      //     user.players[result.uuid].velY = result.velY;
-      //   }
-      // );
-
-      // ! Original
-      // players.forEach((player) => {
-      //   player.mass = Math.max(player.mass * 0.9998, 10);
-
-      //   player.velX = player.velX * 0.9 ** DeltaTime;
-      //   player.velY = player.velY * 0.9 ** DeltaTime;
-
-      //   const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
-      //   const cohesionStrength =
-      //     0.01 *
-      //     player.getDistance(user) ** (0.1 * player.getDistance(user) + 0.5);
-
-      //   const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
-      //   const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
-
-      //   player.x +=
-      //     (8 / (player.radius * 10) + 0.13) * user.mouseVector.x * DeltaTime +
-      //     player.velX +
-      //     cohereX;
-      //   player.y +=
-      //     (8 / (player.radius * 10) + 0.13) * user.mouseVector.y * DeltaTime +
-      //     player.velY +
-      //     cohereY;
-
-      //   player.x = clamp(player.x, 0, this.width);
-      //   player.y = clamp(player.y, 0, this.height);
-      // });
       user.x = (user.bounds.left + user.bounds.right) / 2;
       user.y = (user.bounds.top + user.bounds.bottom) / 2;
 
