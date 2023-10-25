@@ -178,7 +178,7 @@ const clients = {};
 const world = new World(...worldParams);
 world.update(0, Workers);
 
-let first = true;
+let first = false;
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
 wsServer.on("connection", async function (ws, req) {
@@ -386,7 +386,7 @@ function handleKey(keypress) {
         if (player.mass > 34 && Object.values(user.players).length < 16) {
           player._Partition.mutex.lockWait();
           const { x, y } = user.mouseVector;
-          const mult = player.radius / 1.5;
+          const mult = player.radius / 10;
           world.addEntities(
             player.split(
               { x: x * mult, y: y * mult },

@@ -358,7 +358,9 @@ function updatePlayer(player, user, DeltaTime) {
 
   const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
   const cohesionStrength =
-    0.01 * player.getDistance(user) ** (0.1 * player.getDistance(user) + 0.5) +
+    0.01 *
+      player.getDistance(user) **
+        ((0.1 / player.radius) * player.getDistance(user) + 0.5) +
     0.1;
 
   const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
@@ -458,29 +460,36 @@ function getForce(percent, radius) {
  */
 function playerPlayer(larger, smaller, DeltaTime, index) {
   // TODO: Add Eating & Merge Timer
-  if (
-    (larger.userIndex == smaller.userIndex &&
-      larger.mass < smaller.mass * 1.1) ||
-    larger.mergeTimer ||
-    smaller.mergeTimer
-  ) {
-    // * User is the same And Cannot Merge
-    const separation = getForce(
-      larger.getOverlap(smaller) / smaller.mass,
-      larger.radius
-    );
+  if (larger.userIndex == smaller.userIndex) {
     if (
-      separation > Number.MAX_SAFE_INTEGER ||
-      separation < Number.MIN_SAFE_INTEGER
-    )
-      return;
-    const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-    smaller.velX += Math.cos(angle) * separation * DeltaTime;
-    smaller.velY += Math.sin(angle) * separation * DeltaTime;
-    larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
-    larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
+      larger.mass < smaller.mass * 1.1 ||
+      larger.mergeTimer ||
+      smaller.mergeTimer
+    ) {
+      // * User is the same And Cannot Merge
+      const separation = getForce(
+        larger.getOverlap(smaller) / smaller.mass,
+        larger.radius
+      );
+      if (
+        separation > Number.MAX_SAFE_INTEGER ||
+        separation < Number.MIN_SAFE_INTEGER
+      )
+        return;
+      const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
+      smaller.velX += Math.cos(angle) * separation * DeltaTime;
+      smaller.velY += Math.sin(angle) * separation * DeltaTime;
+      larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
+      larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
+    } else {
+      // * Can Merge
+      const overlap = larger.getOverlap(smaller) / smaller.mass;
+      if (overlap > 0.75) {
+        return [index, 0, "eat_other", overlap];
+      }
+    }
   } else {
-    // * User is different or can Merge\
+    // * User is different
     const overlap = larger.getOverlap(smaller) / smaller.mass;
     if (overlap > 0.75) {
       return [index, 0, "eat_other", overlap];

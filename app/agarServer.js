@@ -40,11 +40,18 @@ function stringToColour(str) {
 }
 
 /**
+ * @callback CollisionFilter
+ * @param {Circle} circleA
+ * @param {Circle} circleB
+ * @returns {boolean}
+ */
+/**
  * Bentley-Ottmann algorithm adaptation to find all intersecting circles
  * @param {Circle[]} circles
+ * @param {CollisionFilter} filter
  * @returns {[[Circle, Circle]]}
  */
-function findCircleIntersections(circles) {
+function findCircleIntersections(circles, filter) {
   /** @type {Array.<{x: number, y:number, circle:Circle, type: "left"|"right"}>} */
   const events = [];
   /** @type {[[Circle, Circle]]} */
@@ -64,7 +71,7 @@ function findCircleIntersections(circles) {
   events.forEach(({ circle, type }) => {
     if (type === "left") {
       activeCircles.forEach((activeCircle) => {
-        if (circle.intersecting(activeCircle)) {
+        if (circle.intersecting(activeCircle) && filter(circle, activeCircle)) {
           if (circle.radius >= activeCircle.radius)
             intersections.push([circle, activeCircle]);
           else intersections.push([activeCircle, circle]);
@@ -685,7 +692,12 @@ class World {
    */
   async update(DeltaTime, Workers) {
     this.tick = (this.tick + 1) % 2;
-    const intersections = findCircleIntersections(Object.values(this.entities));
+    const intersections = findCircleIntersections(
+      Object.values(this.entities),
+      (circleA, circleB) => {
+        return !(circleA instanceof Food && circleB instanceof Food);
+      }
+    );
     const intersectionTasks = intersections.map(([larger, smaller], index) => {
       return {
         type: 2,
@@ -703,8 +715,6 @@ class World {
 
     /** @type {Object.<string,{target: Player, eaters: {circle: Player, percent: number}[]}>} */
     const merges = {};
-    /** @type {string[]} */
-    const eaters = [];
 
     intersectionResult.forEach(([index, target, effect, extra]) => {
       const circle = intersections[index][target];
@@ -727,7 +737,6 @@ class World {
               eaters: [{ circle, percent: extra }],
             };
           }
-          eaters.push(circle.uuid.UUID);
           break;
         }
       }
@@ -735,17 +744,17 @@ class World {
 
     Object.values(merges)
       .sort((a, b) => a.target.mass - b.target.mass)
-      .forEach((merger) => {
-        merger.eaters
-          .filter((ref) => eaters.includes(ref.circle.uuid.UUID))
-          .sort((a, b) => a.percent - b.percent)
-          .pop().circle.mass += merger.target.mass;
-
-        this.dealloc.player.unshift(merger.target.kill());
-        delete this.entities[merger.target.uuid.UUID];
-        delete this.players[merger.target.uuid.UUID];
-        delete merger.target.siblings[merger.target.uuid.UUID];
-        this.killed.push(merger.target.uuid);
+      .forEach(({ eaters, target }) => {
+        eaters.sort((a, b) => a.percent - b.percent);
+        let eater = eaters.pop();
+        while (!eater instanceof Player) eater = eaters.pop();
+        console.log(eater);
+        eater.circle.mass += target.mass;
+        this.dealloc.player.unshift(target.kill());
+        delete this.entities[target.uuid.UUID];
+        delete this.players[target.uuid.UUID];
+        delete target.siblings[target.uuid.UUID];
+        this.killed.push(target.uuid);
       });
 
     await Workers.assignAll({

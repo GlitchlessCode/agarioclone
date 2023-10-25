@@ -226,11 +226,27 @@ class World {
     );
   }
 
-  draw() {
+  /**
+   * @param {{x:{min:number, max:number},y:{min:number, max:number}}} bounds
+   */
+  draw(bounds) {
     /** @type {Array.<{x:number, y:number, r:number, c:string, n:string, t: number}>}*/
     const result = new Array();
-    for (const [key, entity] of Object.entries(this.#entities)) {
-      if (entity instanceof Entity) result.push(entity.draw());
+    for (const [key, entity] of Object.entries(this.#entities).sort(
+      ([_, a], [__, b]) => {
+        return a.x - a.radius - (b.x - b.radius);
+      }
+    )) {
+      if (entity instanceof Entity) {
+        if (
+          entity.x + entity.radius < bounds.x.min ||
+          entity.y + entity.radius < bounds.y.min ||
+          entity.y - entity.radius > bounds.y.max
+        )
+          continue;
+        if (entity.x - entity.radius > bounds.x.max) break;
+        result.push(entity.draw());
+      }
     }
     return result;
   }
@@ -398,7 +414,17 @@ class Camera {
 
     if (this.world instanceof World) {
       // Draw Entities
-      const drawArray = this.world.draw();
+      const offset = 50 / this.camScale;
+      const drawArray = this.world.draw({
+        x: {
+          min: this.x - offset,
+          max: this.x + offset,
+        },
+        y: {
+          min: this.y - offset,
+          max: this.y + offset,
+        },
+      });
       drawArray.sort((a, b) => {
         return a.r - b.r;
       });
