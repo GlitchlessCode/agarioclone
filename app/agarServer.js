@@ -291,8 +291,8 @@ class Player extends Circle {
     this.mergeTimer = timer;
 
     const newPlayer = new Player(
-      this.x,
-      this.y,
+      this.x + vector.x / 2,
+      this.y + vector.y / 2,
       this.userID,
       this.userIndex,
       Partition
@@ -416,7 +416,7 @@ class User extends Entity {
    * @param {World} world
    */
   constructor(x, y, UUID, world, userIndex) {
-    super(x, y, world.dealloc.user.shift(), UUID);
+    super(x, y, world.dealloc.user.shift(), UUID); // ! Temporary
     this.mouse.x = 0;
     this.mouse.y = 0;
     this._userIndex = userIndex;
@@ -559,6 +559,8 @@ class World {
   dealloc;
   /** @type {number} */
   tick;
+  /** @type {{player: Partition, virus: Partition, food: Partition, mass: Partition, user: Partition}}*/
+  partitionData;
 
   /**
    * @typedef {Object} Partition
@@ -643,6 +645,7 @@ class World {
     this.minFood = minFood;
     this.killed = [];
     this.tick = 0;
+    this.partitionData = partitionData;
   }
 
   /**
@@ -748,7 +751,6 @@ class World {
         eaters.sort((a, b) => a.percent - b.percent);
         let eater = eaters.pop();
         while (!eater instanceof Player) eater = eaters.pop();
-        console.log(eater);
         eater.circle.mass += target.mass;
         this.dealloc.player.unshift(target.kill());
         delete this.entities[target.uuid.UUID];
@@ -855,7 +857,9 @@ class World {
 
   get newUserIndex() {
     if (this.dealloc.user.length == 0)
-      throw new Error("Cannot have more than 255 users");
+      throw new Error(
+        `Cannot have more than ${this.partitionData.user.count} users`
+      );
     return this.dealloc.user[0].index;
   }
 }

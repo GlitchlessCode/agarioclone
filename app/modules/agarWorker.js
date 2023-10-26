@@ -1,7 +1,7 @@
 /** @type {{parentPort:MessagePort, threadId:number, workerData:SharedArrayBuffer}} */
 const path = require("path");
 const { parentPort, threadId, workerData } = require("worker_threads");
-const { SHARED_MEMORY_PARTITIONS } = require("./sharedArrayBuffer");
+const { SHARED_MEMORY_PARTITIONS } = require("./bufferConfig");
 const { SharedBufferPartition, MutexError } = require("./sharedData");
 const SHARED_MEMORY = new Uint8Array(workerData.buff);
 const world = {
@@ -490,9 +490,15 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
     }
   } else {
     // * User is different
-    const overlap = larger.getOverlap(smaller) / smaller.mass;
-    if (overlap > 0.75) {
-      return [index, 0, "eat_other", overlap];
+    if (
+      larger.mass > smaller.mass * 1.1 &&
+      !larger.mergeTimer &&
+      !smaller.mergeTimer
+    ) {
+      const overlap = larger.getOverlap(smaller) / smaller.mass;
+      if (overlap > 0.75) {
+        return [index, 0, "eat_other", overlap];
+      }
     }
   }
 }

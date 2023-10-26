@@ -10,7 +10,7 @@ const {
   getType,
   Player,
 } = require("./agarServer");
-const { SHARED_MEMORY_PARTITIONS } = require("./modules/sharedArrayBuffer");
+const { SHARED_MEMORY_PARTITIONS } = require("./modules/bufferConfig");
 const { availableParallelism } = require("os");
 const { Worker } = require("worker_threads");
 
@@ -178,10 +178,14 @@ const clients = {};
 const world = new World(...worldParams);
 world.update(0, Workers);
 
-let first = false;
+let first = true;
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
 wsServer.on("connection", async function (ws, req) {
+  if (world.dealloc.user.length == 0) {
+    ws.close();
+    return;
+  }
   // TODO: REWRITE STARTUP
   // * The startup sequence leaves ghost food orbs on the client side
   const UUID = uuid();
@@ -386,11 +390,12 @@ function handleKey(keypress) {
         if (player.mass > 34 && Object.values(user.players).length < 16) {
           player._Partition.mutex.lockWait();
           const { x, y } = user.mouseVector;
-          const mult = player.radius / 10;
+          const mult =
+            2.6 * Math.sqrt(player.radius) * Math.log10(player.radius);
           world.addEntities(
             player.split(
               { x: x * mult, y: y * mult },
-              world.dealloc.player.shift()
+              world.dealloc.player.shift() // ! Temporary
             )
           );
           player._Partition.mutex.unlock();
