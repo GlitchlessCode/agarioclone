@@ -25,9 +25,9 @@ const worldParams = [
   350n,
   350n,
   SHARED_MEMORY_PARTITIONS.food.count,
+  SHARED_MEMORY_PARTITIONS.virus.count,
   SHARED_MEMORY,
   SHARED_MEMORY_PARTITIONS,
-  // new Entities.Virus(175, 175)
 ];
 
 class Deferred {

@@ -459,7 +459,6 @@ function getForce(percent, radius) {
  * @returns
  */
 function playerPlayer(larger, smaller, DeltaTime, index) {
-  // TODO: Add Eating & Merge Timer
   if (larger.userIndex == smaller.userIndex) {
     if (
       larger.mass < smaller.mass * 1.1 ||

@@ -86,11 +86,16 @@ function findCircleIntersections(circles, filter) {
   return intersections;
 }
 
-function getForce(percent, radius) {
-  return -Math.min(
-    0.1 * radius,
-    Math.max(0.005, 0.1 * radius * Math.log10(8 * percent))
-  );
+/**
+ *
+ * @param {number} width
+ * @param {number} height
+ * @param {User[]} userList
+ * @returns
+ */
+function randomNonCollision(width, height, userList) {
+  const result = [Math.random() * width, Math.random() * height];
+  return result;
 }
 
 class Entity {
@@ -553,6 +558,8 @@ class World {
   #height;
   /** @type {number} */
   minFood;
+  /** @type {number} */
+  minViruses;
   /** @type {{UUID: string, buff: ArrayBuffer}[]} */
   killed;
   /** @type {{player: SharedBufferPartition[], virus: SharedBufferPartition[], food: SharedBufferPartition[], mass: SharedBufferPartition[], user: SharedBufferPartition[]}} */
@@ -571,6 +578,7 @@ class World {
    * @param {bigint} width
    * @param {bigint} height
    * @param {number} minFood
+   * @param {number} minViruses
    * @param {Uint8Array} sharedMemory
    * @param {{player: Partition, virus: Partition, food: Partition, mass: Partition, user: Partition}} partitionData
    * @param  {...Circle} entities
@@ -579,6 +587,7 @@ class World {
     width,
     height,
     minFood,
+    minViruses,
     sharedMemory,
     partitionData,
     ...entities
@@ -643,6 +652,7 @@ class World {
     this.#width = width;
     this.#height = height;
     this.minFood = minFood;
+    this.minViruses = minViruses;
     this.killed = [];
     this.tick = 0;
     this.partitionData = partitionData;
@@ -798,47 +808,32 @@ class World {
     } catch (err) {
       console.error(err);
     }
-  }
 
-  /**
-   * @param {[Circle, Circle][]} intersections
-   */
-  collisionSim(intersections, DeltaTime) {
-    intersections.forEach(([larger, smaller]) => {
-      if (larger instanceof Player && smaller instanceof Food) {
-        if (!larger.encloses(smaller)) return;
-        larger.mass++;
-        this.dealloc.food.unshift(smaller.kill());
-        delete this.entities[smaller.uuid.UUID];
-        delete this.food[smaller.uuid.UUID];
-        this.killed.push(smaller.uuid);
-      } else if (larger instanceof Player && smaller instanceof Player) {
-        // TODO: Add Eating & Merge Timer
-        if (larger.userID == smaller.userID) {
-          // * User is the same
-          const separation = getForce(
-            1 - larger.getDistance(smaller) / (larger.radius + smaller.radius),
-            larger.radius
-          );
-          if (
-            separation > Number.MAX_SAFE_INTEGER ||
-            separation < Number.MIN_SAFE_INTEGER
+    try {
+      if (Object.keys(this.viruses).length < this.minViruses) {
+        const userList = Object.values(this.users).sort(
+          (a, b) => a.bounds.left - b.bounds.left
+        );
+        this.addEntities(
+          ...Array.from(
+            { length: this.minFood - Object.keys(this.food).length },
+            () => {
+              const coords = randomNonCollision(
+                this.width,
+                this.height,
+                userList
+              );
+              return new Food(
+                ...coords,
+                this.dealloc.food.shift() // ! Temporary
+              );
+            }
           )
-            return;
-          const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-          smaller.velX += Math.cos(angle) * separation * DeltaTime;
-          smaller.velY += Math.sin(angle) * separation * DeltaTime;
-          larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
-          larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
-        } else {
-          // * User is different
-          console.log(larger.getOverlap(smaller) / smaller.mass);
-        }
-      } else if (larger instanceof Player && smaller instanceof Virus) {
-      } else if (larger instanceof Player && smaller instanceof Mass) {
-      } else if (larger instanceof Virus && smaller instanceof Mass) {
+        );
       }
-    });
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   reset() {
