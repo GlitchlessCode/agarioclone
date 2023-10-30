@@ -417,7 +417,20 @@ function collisionSim({ larger, smaller, DeltaTime, index }) {
     }
     case 1: {
       // (0<<2 = 0) + 1 = 1
-      return playerVirus(DeltaTime);
+      const partitionA = PARTITIONS.player[larger.index];
+      const partitionB = PARTITIONS.virus[smaller.index];
+
+      duoLock(larger.index, partitionA, smaller.index, partitionB);
+
+      Player.setPartition(partitionA);
+      Virus.setPartition(partitionB);
+
+      const result = playerVirus(Player, Virus, DeltaTime, index);
+
+      partitionA.mutex.unlock();
+      partitionB.mutex.unlock();
+
+      return result;
     }
     case 2: {
       // (0<<2 = 0) + 2 = 2
@@ -484,7 +497,7 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
       // * Can Merge
       const overlap = larger.getOverlap(smaller) / smaller.mass;
       if (overlap > 0.75) {
-        return [index, 0, "eat_other", overlap];
+        return [index, 0, "eat_player", overlap];
       }
     }
   } else {
@@ -496,13 +509,20 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
     ) {
       const overlap = larger.getOverlap(smaller) / smaller.mass;
       if (overlap > 0.75) {
-        return [index, 0, "eat_other", overlap];
+        return [index, 0, "eat_player", overlap];
       }
     }
   }
 }
 
-function playerVirus(larger, smaller, DeltaTime, index) {}
+function playerVirus(larger, smaller, DeltaTime, index) {
+  if (larger.mass > smaller.mass * 1.1) {
+    const overlap = larger.getOverlap(smaller) / smaller.mass;
+    if (overlap > 0.75) {
+      return [index, 0, "eat_virus", overlap];
+    }
+  }
+}
 
 /**
  * @param {PlayerInterface} larger

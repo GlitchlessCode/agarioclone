@@ -387,7 +387,7 @@ function handleKey(keypress) {
     case 0:
       if (Object.values(user.players).length >= 16) break;
       for (const player of Object.values(user.players)) {
-        if (player.mass > 34 && Object.values(user.players).length < 16) {
+        if (player.mass >= 35 && Object.values(user.players).length < 16) {
           player._Partition.mutex.lockWait();
           const { x, y } = user.mouseVector;
           const mult =

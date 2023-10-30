@@ -86,18 +86,6 @@ function findCircleIntersections(circles, filter) {
   return intersections;
 }
 
-/**
- *
- * @param {number} width
- * @param {number} height
- * @param {User[]} userList
- * @returns
- */
-function randomNonCollision(width, height, userList) {
-  const result = [Math.random() * width, Math.random() * height];
-  return result;
-}
-
 class Entity {
   /** @type {SharedBufferPartition} */
   _Partition;
@@ -568,6 +556,8 @@ class World {
   tick;
   /** @type {{player: Partition, virus: Partition, food: Partition, mass: Partition, user: Partition}}*/
   partitionData;
+  /** @type {Object.<string, Circle>} */
+  collisionWait;
 
   /**
    * @typedef {Object} Partition
@@ -656,6 +646,7 @@ class World {
     this.killed = [];
     this.tick = 0;
     this.partitionData = partitionData;
+    this.collisionWait = {};
   }
 
   /**
@@ -683,15 +674,17 @@ class World {
         if (!(element instanceof Entity))
           throw new TypeError("entities[] must be of type Entity");
         else {
-          if (element instanceof User) this.users[element.uuid.UUID] = element;
-          else {
+          if (element instanceof User) {
+            this.users[element.uuid.UUID] = element;
+          } else if (element instanceof Virus) {
+            this.viruses[element.uuid.UUID] = element;
+            this.collisionWait[element.uuid.UUID] = element;
+          } else {
             this.entities[element.uuid.UUID] = element;
             if (element instanceof Player) {
               this.players[element.uuid.UUID] = element;
               this.users[element.userID].players[element.uuid.UUID] = element;
             }
-            if (element instanceof Virus)
-              this.viruses[element.uuid.UUID] = element;
             if (element instanceof Food) this.food[element.uuid.UUID] = element;
             if (element instanceof Mass) this.mass[element.uuid.UUID] = element;
           }
@@ -727,7 +720,9 @@ class World {
     const intersectionResult = await Workers.massAssign(intersectionTasks);
 
     /** @type {Object.<string,{target: Player, eaters: {circle: Player, percent: number}[]}>} */
-    const merges = {};
+    const playerMerges = {};
+    /** @type {Object.<string,{target: Virus, eaters: {circle: Player, percent: number}[]}>} */
+    const virusMerges = {};
 
     intersectionResult.forEach(([index, target, effect, extra]) => {
       const circle = intersections[index][target];
@@ -740,12 +735,24 @@ class World {
           this.killed.push(circle.uuid);
           break;
         }
-        case "eat_other": {
-          const other = intersections[index][(target + 1) % 2];
-          if (Object.hasOwn(merges, other.uuid.UUID)) {
-            merges[other.uuid.UUID].eaters.push(circle);
+        case "eat_player": {
+          const other = intersections[index][(target + 1) % 2]; // Selects the other Circle in the Intersection Set
+          if (Object.hasOwn(playerMerges, other.uuid.UUID)) {
+            playerMerges[other.uuid.UUID].eaters.push(circle);
           } else {
-            merges[other.uuid.UUID] = {
+            playerMerges[other.uuid.UUID] = {
+              target: other,
+              eaters: [{ circle, percent: extra }],
+            };
+          }
+          break;
+        }
+        case "eat_virus": {
+          const other = intersections[index][(target + 1) % 2]; // Selects the other Circle in the Intersection Set
+          if (Object.hasOwn(virusMerges, other.uuid.UUID)) {
+            virusMerges[other.uuid.UUID].eaters.push(circle);
+          } else {
+            virusMerges[other.uuid.UUID] = {
               target: other,
               eaters: [{ circle, percent: extra }],
             };
@@ -755,18 +762,40 @@ class World {
       }
     });
 
-    Object.values(merges)
+    Object.values(playerMerges)
       .sort((a, b) => a.target.mass - b.target.mass)
       .forEach(({ eaters, target }) => {
+        if (!(target instanceof Circle)) return;
         eaters.sort((a, b) => a.percent - b.percent);
         let eater = eaters.pop();
         while (!eater instanceof Player) eater = eaters.pop();
         eater.circle.mass += target.mass;
-        this.dealloc.player.unshift(target.kill());
+        this.dealloc.player.unshift(target.kill()); // ! Temporary
         delete this.entities[target.uuid.UUID];
         delete this.players[target.uuid.UUID];
         delete target.siblings[target.uuid.UUID];
         this.killed.push(target.uuid);
+      });
+
+    Object.values(virusMerges)
+      .sort((a, b) => a.target.mass - b.target.mass)
+      .forEach(({ eaters, target }) => {
+        if (!(target instanceof Circle)) return;
+        eaters.sort((a, b) => a.percent - b.percent);
+        let eater = eaters.pop();
+        while (!eater instanceof Player) eater = eaters.pop();
+        eater.circle.mass += target.mass;
+        this.dealloc.virus.unshift(target.kill()); // ! Temporary
+        delete this.entities[target.uuid.UUID];
+        delete this.viruses[target.uuid.UUID];
+        this.killed.push(target.uuid);
+
+        // const player = eater.circle;
+        // while (
+        //   Object.keys(this.users[player.userID].players).length < 16 &&
+        //   Math.max(...Object.values(player.siblings).map((a) => a.mass)) >= 35
+        // ) {}
+        // TODO: This ^
       });
 
     await Workers.assignAll({
@@ -811,21 +840,14 @@ class World {
 
     try {
       if (Object.keys(this.viruses).length < this.minViruses) {
-        const userList = Object.values(this.users).sort(
-          (a, b) => a.bounds.left - b.bounds.left
-        );
         this.addEntities(
           ...Array.from(
-            { length: this.minFood - Object.keys(this.food).length },
+            { length: this.minViruses - Object.keys(this.viruses).length },
             () => {
-              const coords = randomNonCollision(
-                this.width,
-                this.height,
-                userList
-              );
-              return new Food(
-                ...coords,
-                this.dealloc.food.shift() // ! Temporary
+              return new Virus(
+                Math.random() * this.width,
+                Math.random() * this.height,
+                this.dealloc.virus.shift() // ! Temporary
               );
             }
           )
@@ -833,6 +855,30 @@ class World {
       }
     } catch (err) {
       console.error(err);
+    }
+
+    if (Object.values(this.collisionWait).length > 0) {
+      const placementIntersections = findCircleIntersections(
+        [...Object.values(this.collisionWait), ...Object.values(this.players)],
+        (circleA, circleB) => {
+          return !(
+            (Object.hasOwn(this.collisionWait, circleA.uuid.UUID) &&
+              Object.hasOwn(this.collisionWait, circleB.uuid.UUID)) ||
+            (Object.hasOwn(this.players, circleA.uuid.UUID) &&
+              Object.hasOwn(this.players, circleB.uuid.UUID))
+          );
+        }
+      );
+      const spawnList = Object.keys(this.collisionWait);
+      placementIntersections.forEach(([a, b]) => {
+        spawnList = spawnList.filter(
+          (str) => !(str == a.uuid.UUID || str == b.uuid.UUID)
+        );
+      });
+      spawnList.forEach((id) => {
+        this.entities[id] = this.collisionWait[id];
+        delete this.collisionWait[id];
+      });
     }
   }
 
