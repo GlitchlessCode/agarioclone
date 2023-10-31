@@ -701,7 +701,10 @@ class World {
     const intersections = findCircleIntersections(
       Object.values(this.entities),
       (circleA, circleB) => {
-        return !(circleA instanceof Food && circleB instanceof Food);
+        return !(
+          (circleA instanceof Food && circleB instanceof Food) ||
+          (circleA instanceof Virus && circleB instanceof Food)
+        );
       }
     );
     const intersectionTasks = intersections.map(([larger, smaller], index) => {
@@ -768,13 +771,16 @@ class World {
         if (!(target instanceof Circle)) return;
         eaters.sort((a, b) => a.percent - b.percent);
         let eater = eaters.pop();
-        while (!eater instanceof Player) eater = eaters.pop();
-        eater.circle.mass += target.mass;
-        this.dealloc.player.unshift(target.kill()); // ! Temporary
-        delete this.entities[target.uuid.UUID];
-        delete this.players[target.uuid.UUID];
-        delete target.siblings[target.uuid.UUID];
-        this.killed.push(target.uuid);
+        while (!(eater.circle instanceof Player) && eaters.length)
+          eater = eaters.pop();
+        if (eater.circle instanceof Player) {
+          eater.circle.mass += target.mass;
+          this.dealloc.player.unshift(target.kill()); // ! Temporary
+          delete this.entities[target.uuid.UUID];
+          delete this.players[target.uuid.UUID];
+          delete target.siblings[target.uuid.UUID];
+          this.killed.push(target.uuid);
+        }
       });
 
     Object.values(virusMerges)
@@ -790,12 +796,33 @@ class World {
         delete this.viruses[target.uuid.UUID];
         this.killed.push(target.uuid);
 
-        // const player = eater.circle;
-        // while (
-        //   Object.keys(this.users[player.userID].players).length < 16 &&
-        //   Math.max(...Object.values(player.siblings).map((a) => a.mass)) >= 35
-        // ) {}
-        // TODO: This ^
+        const player = eater.circle;
+        const mult = 3 * Math.sqrt(player.radius) * Math.log10(player.radius);
+        const newPlayers = [];
+        while (
+          Object.keys(this.users[player.userID].players).length +
+            newPlayers.length <
+            16 &&
+          Math.max(...[player, ...newPlayers].map((a) => a.mass)) >= 35
+        ) {
+          /** @type {Player} */
+          const largest = [player, ...newPlayers].sort(
+            (a, b) => b.mass - a.mass
+          )[0];
+
+          const angle = Math.random() * Math.PI * 2;
+
+          newPlayers.push(
+            largest.split(
+              {
+                x: Math.cos(angle) * mult,
+                y: Math.sin(angle) * mult,
+              },
+              this.dealloc.player.shift() // ! Temporary
+            )
+          );
+        }
+        this.addEntities(...newPlayers);
       });
 
     await Workers.assignAll({
@@ -810,10 +837,10 @@ class World {
       user.scale =
         100 /
         (Math.max(
-          user.bounds.bottom - user.bounds.top,
-          user.bounds.right - user.bounds.left
+          (user.bounds.bottom - user.bounds.top) * 1.1,
+          (user.bounds.right - user.bounds.left) * 1.1
         ) +
-          60);
+          100);
 
       // Clamp (just in case)
       user.x = clamp(user.x, 0, this.width);
@@ -869,7 +896,7 @@ class World {
           );
         }
       );
-      const spawnList = Object.keys(this.collisionWait);
+      let spawnList = Object.keys(this.collisionWait);
       placementIntersections.forEach(([a, b]) => {
         spawnList = spawnList.filter(
           (str) => !(str == a.uuid.UUID || str == b.uuid.UUID)

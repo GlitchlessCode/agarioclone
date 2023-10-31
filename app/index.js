@@ -22,8 +22,8 @@ const TOTAL_MEMORY_SIZE = Object.values(SHARED_MEMORY_PARTITIONS)
 const SHARED_MEMORY = new Uint8Array(new SharedArrayBuffer(TOTAL_MEMORY_SIZE));
 
 const worldParams = [
-  350n,
-  350n,
+  450n,
+  450n,
   SHARED_MEMORY_PARTITIONS.food.count,
   SHARED_MEMORY_PARTITIONS.virus.count,
   SHARED_MEMORY,

@@ -502,11 +502,7 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
     }
   } else {
     // * User is different
-    if (
-      larger.mass > smaller.mass * 1.1 &&
-      !larger.mergeTimer &&
-      !smaller.mergeTimer
-    ) {
+    if (larger.mass > smaller.mass * 1.1) {
       const overlap = larger.getOverlap(smaller) / smaller.mass;
       if (overlap > 0.75) {
         return [index, 0, "eat_player", overlap];
