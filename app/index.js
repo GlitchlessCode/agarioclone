@@ -173,6 +173,8 @@ class Workers {
 }
 
 const app = express();
+
+/** @type {Object.<string, WebSocket>} */
 const clients = {};
 
 const world = new World(...worldParams);
@@ -197,7 +199,7 @@ wsServer.on("connection", async function (ws, req) {
     init: false,
     tickReady: false,
   };
-  clients[UUID] = ws;
+  clients[UUID.UUID] = ws;
   const rand = {
     x: Math.random() * world.width,
     y: Math.random() * world.height,
@@ -219,9 +221,20 @@ wsServer.on("connection", async function (ws, req) {
   if (first) {
     // ! TEMPORARY
     first = false;
-    Object.values(world.players)[0].mass += 350;
+    Object.values(world.players)[0].mass += 11000;
   }
 });
+
+world.on(
+  "userDeath",
+  /** @param {string} result  */
+  async (result) => {
+    clients[result.uuid].send(await createMessage(16));
+    delete clients[this.id.UUID];
+    world.dealloc.user.unshift(world.users[this.id.UUID].kill());
+    console.log("Connection Closed!");
+  }
+);
 
 // Express Server
 const server = app.listen(3000);

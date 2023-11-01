@@ -476,7 +476,8 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
     if (
       larger.mass < smaller.mass * 1.1 ||
       larger.mergeTimer ||
-      smaller.mergeTimer
+      smaller.mergeTimer ||
+      larger.mass + smaller.mass > 22500
     ) {
       // * User is the same And Cannot Merge
       const separation = getForce(
@@ -497,7 +498,7 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
       // * Can Merge
       const overlap = larger.getOverlap(smaller) / smaller.mass;
       if (overlap > 0.75) {
-        return [index, 0, "eat_player", overlap];
+        return [[index, 0, "eat_player", overlap]];
       }
     }
   } else {
@@ -505,7 +506,7 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
     if (larger.mass > smaller.mass * 1.1) {
       const overlap = larger.getOverlap(smaller) / smaller.mass;
       if (overlap > 0.75) {
-        return [index, 0, "eat_player", overlap];
+        return (result = [[index, 0, "eat_player", overlap]]);
       }
     }
   }
@@ -515,7 +516,7 @@ function playerVirus(larger, smaller, DeltaTime, index) {
   if (larger.mass > smaller.mass * 1.1) {
     const overlap = larger.getOverlap(smaller) / smaller.mass;
     if (overlap > 0.75) {
-      return [index, 0, "eat_virus", overlap];
+      return [[index, 0, "eat_virus", overlap]];
     }
   }
 }
@@ -530,7 +531,9 @@ function playerVirus(larger, smaller, DeltaTime, index) {
 function playerFood(larger, smaller, DeltaTime, index) {
   if (!larger.encloses(smaller)) return;
   larger.mass++;
-  return [index, 1, "kill"];
+  const result = [[index, 1, "kill"]];
+  if (larger.mass > 11250) result.push([index, 0, "force_split"]);
+  return result;
 }
 
 function playerMass(larger, smaller, DeltaTime, index) {}

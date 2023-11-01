@@ -10,5 +10,6 @@
 9: Mouse [mouseX {(-1) to (1)} (8), mouseY {(-1) to (1)} (8)]
 10: Input Event [type(1)]
 
+16: User Death []
 
 255: Error on Sender []

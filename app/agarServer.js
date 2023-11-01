@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { SharedBufferPartition } = require("./modules/sharedData");
+const { EventEmitter } = require("stream");
 
 /**
  * @param {Circle} entity
@@ -84,6 +85,18 @@ function findCircleIntersections(circles, filter) {
   });
 
   return intersections;
+}
+
+/**
+ * @param {Player} player
+ */
+function forceSplit(player, callback) {
+  if (Object.values(player.siblings).length >= 16) {
+    player.mass = 11250;
+  } else {
+    // callback(player.split());
+    // TODO: This^
+  }
 }
 
 class Entity {
@@ -527,7 +540,10 @@ class User extends Entity {
   }
 }
 
-class World {
+/**
+ * @fires User#death
+ */
+class World extends EventEmitter {
   /** @type {Object.<string, Circle>} */
   entities;
   /** @type {Object.<string, Player>} */
@@ -582,6 +598,7 @@ class World {
     partitionData,
     ...entities
   ) {
+    super();
     this.dealloc = {
       player: new Array(),
       virus: new Array(),
@@ -703,7 +720,8 @@ class World {
       (circleA, circleB) => {
         return !(
           (circleA instanceof Food && circleB instanceof Food) ||
-          (circleA instanceof Virus && circleB instanceof Food)
+          (circleA instanceof Virus && circleB instanceof Food) ||
+          (circleA instanceof Food && circleB instanceof Virus)
         );
       }
     );
@@ -719,7 +737,7 @@ class World {
       };
     });
 
-    /** @type {[number, number, string, ?number][]} */
+    /** @type {[number, number, string, ?number][][]} */
     const intersectionResult = await Workers.massAssign(intersectionTasks);
 
     /** @type {Object.<string,{target: Player, eaters: {circle: Player, percent: number}[]}>} */
@@ -727,43 +745,48 @@ class World {
     /** @type {Object.<string,{target: Virus, eaters: {circle: Player, percent: number}[]}>} */
     const virusMerges = {};
 
-    intersectionResult.forEach(([index, target, effect, extra]) => {
-      const circle = intersections[index][target];
-      switch (effect) {
-        case "kill": {
-          const name = circle.name;
-          this.dealloc[name].unshift(circle.kill());
-          delete this.entities[circle.uuid.UUID];
-          delete this[name][circle.uuid.UUID];
-          this.killed.push(circle.uuid);
-          break;
-        }
-        case "eat_player": {
-          const other = intersections[index][(target + 1) % 2]; // Selects the other Circle in the Intersection Set
-          if (Object.hasOwn(playerMerges, other.uuid.UUID)) {
-            playerMerges[other.uuid.UUID].eaters.push(circle);
-          } else {
-            playerMerges[other.uuid.UUID] = {
-              target: other,
-              eaters: [{ circle, percent: extra }],
-            };
+    for (const intersect of intersectionResult) {
+      intersect.forEach(([index, target, effect, extra]) => {
+        const circle = intersections[index][target];
+        switch (effect) {
+          case "kill": {
+            const name = circle.name;
+            this.dealloc[name].unshift(circle.kill());
+            delete this.entities[circle.uuid.UUID];
+            delete this[name][circle.uuid.UUID];
+            this.killed.push(circle.uuid);
+            break;
           }
-          break;
-        }
-        case "eat_virus": {
-          const other = intersections[index][(target + 1) % 2]; // Selects the other Circle in the Intersection Set
-          if (Object.hasOwn(virusMerges, other.uuid.UUID)) {
-            virusMerges[other.uuid.UUID].eaters.push(circle);
-          } else {
-            virusMerges[other.uuid.UUID] = {
-              target: other,
-              eaters: [{ circle, percent: extra }],
-            };
+          case "eat_player": {
+            const other = intersections[index][(target + 1) % 2]; // Selects the other Circle in the Intersection Set
+            if (Object.hasOwn(playerMerges, other.uuid.UUID)) {
+              playerMerges[other.uuid.UUID].eaters.push(circle);
+            } else {
+              playerMerges[other.uuid.UUID] = {
+                target: other,
+                eaters: [{ circle, percent: extra }],
+              };
+            }
+            break;
           }
-          break;
+          case "eat_virus": {
+            const other = intersections[index][(target + 1) % 2]; // Selects the other Circle in the Intersection Set
+            if (Object.hasOwn(virusMerges, other.uuid.UUID)) {
+              virusMerges[other.uuid.UUID].eaters.push(circle);
+            } else {
+              virusMerges[other.uuid.UUID] = {
+                target: other,
+                eaters: [{ circle, percent: extra }],
+              };
+            }
+            break;
+          }
+          case "force_split": {
+            forceSplit(circle, this.addEntities);
+          }
         }
-      }
-    });
+      });
+    }
 
     Object.values(playerMerges)
       .sort((a, b) => a.target.mass - b.target.mass)
@@ -780,6 +803,21 @@ class World {
           delete this.players[target.uuid.UUID];
           delete target.siblings[target.uuid.UUID];
           this.killed.push(target.uuid);
+          if (eater.circle.mass > 11250) {
+            forceSplit(eater.circle, this.addEntities);
+          }
+          if (Object.values(target.siblings).length == 0) {
+            /**
+             * User Death Event
+             *
+             * @event User#death
+             * @type {object}
+             * @property {string} uuid
+             */
+            this.emit("userDeath", {
+              uuid: target.userID,
+            });
+          }
         }
       });
 
@@ -789,40 +827,46 @@ class World {
         if (!(target instanceof Circle)) return;
         eaters.sort((a, b) => a.percent - b.percent);
         let eater = eaters.pop();
-        while (!eater instanceof Player) eater = eaters.pop();
-        eater.circle.mass += target.mass;
-        this.dealloc.virus.unshift(target.kill()); // ! Temporary
-        delete this.entities[target.uuid.UUID];
-        delete this.viruses[target.uuid.UUID];
-        this.killed.push(target.uuid);
+        while (!(eater.circle instanceof Player) && eaters.length)
+          eater = eaters.pop();
+        if (eater.circle instanceof Player) {
+          eater.circle.mass += target.mass;
+          this.dealloc.virus.unshift(target.kill()); // ! Temporary
+          delete this.entities[target.uuid.UUID];
+          delete this.viruses[target.uuid.UUID];
+          this.killed.push(target.uuid);
 
-        const player = eater.circle;
-        const mult = 3 * Math.sqrt(player.radius) * Math.log10(player.radius);
-        const newPlayers = [];
-        while (
-          Object.keys(this.users[player.userID].players).length +
-            newPlayers.length <
-            16 &&
-          Math.max(...[player, ...newPlayers].map((a) => a.mass)) >= 35
-        ) {
-          /** @type {Player} */
-          const largest = [player, ...newPlayers].sort(
-            (a, b) => b.mass - a.mass
-          )[0];
+          const player = eater.circle;
+          const mult = 3 * Math.sqrt(player.radius) * Math.log10(player.radius);
+          const newPlayers = [];
+          while (
+            Object.keys(this.users[player.userID].players).length +
+              newPlayers.length <
+              16 &&
+            Math.max(...[player, ...newPlayers].map((a) => a.mass)) >= 35
+          ) {
+            /** @type {Player} */
+            const largest = [player, ...newPlayers].sort(
+              (a, b) => b.mass - a.mass
+            )[0];
 
-          const angle = Math.random() * Math.PI * 2;
+            const angle = Math.random() * Math.PI * 2;
 
-          newPlayers.push(
-            largest.split(
-              {
-                x: Math.cos(angle) * mult,
-                y: Math.sin(angle) * mult,
-              },
-              this.dealloc.player.shift() // ! Temporary
-            )
-          );
+            newPlayers.push(
+              largest.split(
+                {
+                  x: Math.cos(angle) * mult,
+                  y: Math.sin(angle) * mult,
+                },
+                this.dealloc.player.shift() // ! Temporary
+              )
+            );
+          }
+          if (player.mass > 11250) {
+            forceSplit(player, this.addEntities);
+          }
+          this.addEntities(...newPlayers);
         }
-        this.addEntities(...newPlayers);
       });
 
     await Workers.assignAll({

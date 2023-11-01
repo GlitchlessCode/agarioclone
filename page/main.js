@@ -198,6 +198,10 @@ async function parseMessage({ data }) {
           ws.send(await createMessage(10, new Uint8Array([1])));
       });
       break;
+    case 16:
+      console.log("u r ded");
+      this.close();
+      break;
     case 255:
       throw new Error("server error");
   }
