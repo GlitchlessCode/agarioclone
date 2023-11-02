@@ -89,13 +89,23 @@ function findCircleIntersections(circles, filter) {
 
 /**
  * @param {Player} player
+ * @param {World} world
  */
-function forceSplit(player, callback) {
+function forceSplit(player, world) {
   if (Object.values(player.siblings).length >= 16) {
     player.mass = 11250;
   } else {
-    // callback(player.split());
-    // TODO: This^
+    const angle = Math.random() * Math.PI * 2;
+    const mult = 3 * Math.sqrt(player.radius) * Math.log10(player.radius);
+    world.addEntities(
+      player.split(
+        {
+          x: Math.cos(angle) * mult,
+          y: Math.sin(angle) * mult,
+        },
+        world.mem.player.allocate()
+      )
+    );
   }
 }
 
@@ -422,7 +432,7 @@ class User extends Entity {
    * @param {World} world
    */
   constructor(x, y, UUID, world, userIndex) {
-    super(x, y, world.dealloc.user.shift(), UUID); // ! Temporary
+    super(x, y, world.mem.user.allocate(), UUID);
     this.mouse.x = 0;
     this.mouse.y = 0;
     this._userIndex = userIndex;
@@ -455,7 +465,7 @@ class User extends Entity {
 
   kill() {
     for (const [uuid, player] of Object.entries(this.players)) {
-      this.world.dealloc.player.unshift(player.kill());
+      this.world.mem.player.deallocate(player.kill());
       delete this.world.entities[uuid];
       delete this.world.players[uuid];
       this.world.killed.push(player.uuid);
@@ -541,6 +551,38 @@ class User extends Entity {
 }
 
 /**
+ * @this SharedBufferPartition[]
+ * @param {SharedBufferPartition} buffer
+ * @throws {AllocationError}
+ * @returns {void}
+ */
+function attemptDeallocate(buffer) {
+  if (!(buffer instanceof SharedBufferPartition))
+    throw new AllocationError("buffer must instance of SharedBufferPartition");
+  this.unshift(buffer);
+}
+
+/**
+ * @this SharedBufferPartition[]
+ * @returns {SharedBufferPartition}
+ * @throws {AllocationError}
+ */
+function attemptAllocate() {
+  if (!this.length)
+    throw new AllocationError(
+      "No SharedBufferPartition is available for allocation"
+    );
+  return this.shift();
+}
+
+class AllocationError extends Error {
+  constructor(message) {
+    this.message = message;
+    this.name = "AllocationError";
+  }
+}
+
+/**
  * @fires User#death
  */
 class World extends EventEmitter {
@@ -574,6 +616,24 @@ class World extends EventEmitter {
   partitionData;
   /** @type {Object.<string, Circle>} */
   collisionWait;
+
+  /**
+   * @callback allocate
+   * @returns {SharedBufferPartition}
+   * @throws {AllocationError}
+   */
+  /**
+   * @callback deallocate
+   * @param {SharedBufferPartition} buffer
+   * @returns {void}
+   */
+  /**
+   * @typedef {Object} Allocator
+   * @property {deallocate} deallocate
+   * @property {allocate} allocate
+   */
+  /** @type {{player:Allocator, virus:Allocator, food:Allocator, mass:Allocator, user:Allocator}} */
+  mem;
 
   /**
    * @typedef {Object} Partition
@@ -664,6 +724,29 @@ class World extends EventEmitter {
     this.tick = 0;
     this.partitionData = partitionData;
     this.collisionWait = {};
+
+    this.mem = {
+      player: {
+        allocate: attemptAllocate.bind(this.dealloc.player),
+        deallocate: attemptDeallocate.bind(this.dealloc.player),
+      },
+      virus: {
+        allocate: attemptAllocate.bind(this.dealloc.virus),
+        deallocate: attemptDeallocate.bind(this.dealloc.virus),
+      },
+      food: {
+        allocate: attemptAllocate.bind(this.dealloc.food),
+        deallocate: attemptDeallocate.bind(this.dealloc.food),
+      },
+      mass: {
+        allocate: attemptAllocate.bind(this.dealloc.mass),
+        deallocate: attemptDeallocate.bind(this.dealloc.mass),
+      },
+      user: {
+        allocate: attemptAllocate.bind(this.dealloc.user),
+        deallocate: attemptDeallocate.bind(this.dealloc.user),
+      },
+    };
   }
 
   /**
@@ -682,7 +765,7 @@ class World extends EventEmitter {
               element.y,
               element.UUID,
               element.userIndex,
-              this.dealloc.player.shift() // ! Temporary
+              this.mem.player.allocate()
             )
           );
           return;
@@ -782,7 +865,7 @@ class World extends EventEmitter {
             break;
           }
           case "force_split": {
-            forceSplit(circle, this.addEntities);
+            forceSplit(circle, this);
           }
         }
       });
@@ -798,13 +881,13 @@ class World extends EventEmitter {
           eater = eaters.pop();
         if (eater.circle instanceof Player) {
           eater.circle.mass += target.mass;
-          this.dealloc.player.unshift(target.kill()); // ! Temporary
+          this.mem.player.deallocate(target.kill());
           delete this.entities[target.uuid.UUID];
           delete this.players[target.uuid.UUID];
           delete target.siblings[target.uuid.UUID];
           this.killed.push(target.uuid);
           if (eater.circle.mass > 11250) {
-            forceSplit(eater.circle, this.addEntities);
+            forceSplit(eater.circle, this);
           }
           if (Object.values(target.siblings).length == 0) {
             /**
@@ -831,7 +914,7 @@ class World extends EventEmitter {
           eater = eaters.pop();
         if (eater.circle instanceof Player) {
           eater.circle.mass += target.mass;
-          this.dealloc.virus.unshift(target.kill()); // ! Temporary
+          this.mem.virus.deallocate(target.kill());
           delete this.entities[target.uuid.UUID];
           delete this.viruses[target.uuid.UUID];
           this.killed.push(target.uuid);
@@ -858,12 +941,12 @@ class World extends EventEmitter {
                   x: Math.cos(angle) * mult,
                   y: Math.sin(angle) * mult,
                 },
-                this.dealloc.player.shift() // ! Temporary
+                this.mem.player.allocate()
               )
             );
           }
           if (player.mass > 11250) {
-            forceSplit(player, this.addEntities);
+            forceSplit(player, this);
           }
           this.addEntities(...newPlayers);
         }
@@ -900,7 +983,7 @@ class World extends EventEmitter {
               new Food(
                 Math.random() * this.width,
                 Math.random() * this.height,
-                this.dealloc.food.shift() // ! Temporary
+                this.mem.food.allocate()
               )
           )
         );
@@ -918,7 +1001,7 @@ class World extends EventEmitter {
               return new Virus(
                 Math.random() * this.width,
                 Math.random() * this.height,
-                this.dealloc.virus.shift() // ! Temporary
+                this.mem.virus.allocate()
               );
             }
           )

@@ -211,7 +211,7 @@ wsServer.on("connection", async function (ws, req) {
   );
   ws.on("close", function (code, reason) {
     delete clients[this.id.UUID];
-    world.dealloc.user.unshift(world.users[this.id.UUID].kill());
+    world.mem.user.deallocate(world.users[this.id.UUID].kill());
     console.log("Connection Closed!");
   });
   ws.on("message", parseMessage);
@@ -221,7 +221,7 @@ wsServer.on("connection", async function (ws, req) {
   if (first) {
     // ! TEMPORARY
     first = false;
-    Object.values(world.players)[0].mass += 11000;
+    Object.values(world.players)[0].mass += 350;
   }
 });
 
@@ -230,8 +230,8 @@ world.on(
   /** @param {string} result  */
   async (result) => {
     clients[result.uuid].send(await createMessage(16));
-    delete clients[this.id.UUID];
-    world.dealloc.user.unshift(world.users[this.id.UUID].kill());
+    delete clients[result.uuid];
+    world.mem.user.deallocate(world.users[result.uuid].kill());
     console.log("Connection Closed!");
   }
 );
@@ -381,6 +381,7 @@ async function fetchWorld() {
  * @returns {ArrayBuffer}
  */
 function getUser() {
+  console.log(world.users[this.id.UUID] instanceof Entities.User, this.id.UUID);
   const posView = new DataView(new ArrayBuffer(20));
   return (
     posView.setFloat64(0, world.users[this.id.UUID].x),
@@ -408,7 +409,7 @@ function handleKey(keypress) {
           world.addEntities(
             player.split(
               { x: x * mult, y: y * mult },
-              world.dealloc.player.shift() // ! Temporary
+              world.mem.player.allocate()
             )
           );
           player._Partition.mutex.unlock();

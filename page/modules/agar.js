@@ -451,6 +451,24 @@ class Camera {
             Math.PI * 2
           );
           this.ctx.fill();
+
+          this.ctx.fillStyle = "#eeeeee";
+          this.ctx.strokeStyle = "#111111";
+          this.ctx.lineWidth = (r * scale) / 40;
+          this.ctx.textAlign = "center";
+          this.ctx.textBaseline = "middle";
+          this.ctx.font = `bold ${(r * scale) / 3.7}px sans-serif`;
+          const mass = Math.floor(r ** 2 * Math.PI);
+          this.ctx.fillText(
+            mass,
+            this.cnv.width / 2 - this.x * scale + x * scale,
+            this.cnv.height / 2 - this.y * scale + y * scale + (r * scale) / 3.7
+          );
+          this.ctx.strokeText(
+            mass,
+            this.cnv.width / 2 - this.x * scale + x * scale,
+            this.cnv.height / 2 - this.y * scale + y * scale + (r * scale) / 3.7
+          );
         }
 
         this.ctx.fillStyle = "#eeeeee";
