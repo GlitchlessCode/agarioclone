@@ -211,7 +211,8 @@ wsServer.on("connection", async function (ws, req) {
   );
   ws.on("close", function (code, reason) {
     delete clients[this.id.UUID];
-    world.mem.user.deallocate(world.users[this.id.UUID].kill());
+    if (Object.hasOwn(world.users, this.id.UUID))
+      world.mem.user.deallocate(world.users[this.id.UUID].kill());
     console.log("Connection Closed!");
   });
   ws.on("message", parseMessage);
@@ -232,7 +233,6 @@ world.on(
     clients[result.uuid].send(await createMessage(16));
     delete clients[result.uuid];
     world.mem.user.deallocate(world.users[result.uuid].kill());
-    console.log("Connection Closed!");
   }
 );
 
@@ -381,8 +381,9 @@ async function fetchWorld() {
  * @returns {ArrayBuffer}
  */
 function getUser() {
-  console.log(world.users[this.id.UUID] instanceof Entities.User, this.id.UUID);
   const posView = new DataView(new ArrayBuffer(20));
+  if (!(world.users[this.id.UUID] instanceof Entities.User))
+    delete world.users[this.id.UUID];
   return (
     posView.setFloat64(0, world.users[this.id.UUID].x),
     posView.setFloat64(8, world.users[this.id.UUID].y),
@@ -417,6 +418,24 @@ function handleKey(keypress) {
       }
       break;
     case 1:
+      const { mass } = SHARED_MEMORY_PARTITIONS;
+      for (const player of Object.values(user.players)) {
+        if (player.mass >= 35) {
+          const length = Object.values(world.mass).length;
+          if (length + 1 > mass.count) {
+            const culled = Object.values(world.mass)[length * Math.random()];
+            world.mem.mass.deallocate(culled.kill());
+            delete world.mass[culled.uuid.UUID];
+            delete world.entities[culled.uuid.UUID];
+          }
+          player._Partition.mutex.lockWait();
+          const { x, y } = user.mouseVector;
+          world.addEntities(
+            player.eject({ x: x, y: y }, world.mem.mass.allocate())
+          );
+          player._Partition.mutex.unlock();
+        }
+      }
       break;
     default:
       throw new Error("Invalid keypress");
@@ -432,17 +451,21 @@ function* sendTick(tickData, killed) {
     yield new Promise(async function (resolve, reject) {
       if (ws.gameStatus.tickReady) {
         const infoView = new DataView(new ArrayBuffer(8));
-        ws.send(
-          await createMessage(
-            8,
-            (infoView.setUint32(0, tickData.length),
-            infoView.setUint32(4, killed.length),
-            infoView),
-            getUser.bind(ws)(),
-            ...tickData,
-            ...killed.map((uuid) => uuid.buff)
-          )
-        );
+        try {
+          ws.send(
+            await createMessage(
+              8,
+              (infoView.setUint32(0, tickData.length),
+              infoView.setUint32(4, killed.length),
+              infoView),
+              getUser.bind(ws)(),
+              ...tickData,
+              ...killed.map((uuid) => uuid.buff)
+            )
+          );
+        } catch (error) {
+          console.log(error);
+        }
       }
       resolve();
     });

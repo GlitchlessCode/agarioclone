@@ -41,6 +41,9 @@ const camera = new Camera(0, 0, ctx);
 /** @type {World} */
 let world;
 
+// Alive
+let Alive = true;
+
 // TextDecoder
 const utf8 = new TextDecoder("utf-8");
 
@@ -70,7 +73,7 @@ function drawFrame() {
   ctx.fillRect(0, 0, cnv.width, cnv.height);
   camera.draw();
 
-  requestAnimationFrame(drawFrame);
+  if (Alive) requestAnimationFrame(drawFrame);
 }
 
 /**
@@ -200,6 +203,7 @@ async function parseMessage({ data }) {
       break;
     case 16:
       console.log("u r ded");
+      Alive = false;
       this.close();
       break;
     case 255:

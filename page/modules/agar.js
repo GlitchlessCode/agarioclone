@@ -440,7 +440,7 @@ class Camera {
         );
         this.ctx.fill();
 
-        if (t == 0) {
+        if (t !== 2) {
           this.ctx.fillStyle = shade(c, -40);
           this.ctx.beginPath();
           this.ctx.arc(
@@ -451,7 +451,8 @@ class Camera {
             Math.PI * 2
           );
           this.ctx.fill();
-
+        }
+        if (t == 0) {
           this.ctx.fillStyle = "#eeeeee";
           this.ctx.strokeStyle = "#111111";
           this.ctx.lineWidth = (r * scale) / 40;

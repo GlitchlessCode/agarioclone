@@ -357,20 +357,18 @@ function updatePlayer(player, user, DeltaTime) {
   player.velY = player.velY * 0.9 ** DeltaTime;
 
   const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
-  const cohesionStrength =
-    0.01 *
-      player.getDistance(user) **
-        ((0.1 / player.radius) * player.getDistance(user) + 0.5) +
-    0.1;
+  const cohesionStrength = Math.min(player.getDistance(user) / 10, 1);
 
   const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
   const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
 
   const speed = 8 / (player.radius * 10) + 0.13;
 
-  player.x += speed * user.mouseVector.x * DeltaTime + player.velX + cohereX;
-  player.y += speed * user.mouseVector.y * DeltaTime + player.velY + cohereY;
+  player.x += (speed * user.mouseVector.x + player.velX + cohereX) * DeltaTime;
+  player.y += (speed * user.mouseVector.y + player.velY + cohereY) * DeltaTime;
 
+  if (player.x < 0 || player.x > world.width) player.velX = 0;
+  if (player.y < 0 || player.y > world.height) player.velY = 0;
   player.x = clamp(player.x, 0, world.width);
   player.y = clamp(player.y, 0, world.height);
 }
@@ -477,7 +475,7 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
       larger.mass < smaller.mass * 1.1 ||
       larger.mergeTimer ||
       smaller.mergeTimer ||
-      larger.mass + smaller.mass > 22500
+      larger.mass + smaller.mass > 11250
     ) {
       // * User is the same And Cannot Merge
       const separation = getForce(

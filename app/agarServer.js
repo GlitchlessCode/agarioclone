@@ -306,6 +306,7 @@ class Player extends Circle {
     const timer = 30000 + Math.floor(0.02333333333 * this.mass) * 1000;
     this.mergeTimer = timer;
 
+    Partition.mutex.lockWait();
     const newPlayer = new Player(
       this.x + vector.x / 2,
       this.y + vector.y / 2,
@@ -317,7 +318,29 @@ class Player extends Circle {
     newPlayer.velY = vector.y;
     newPlayer.mass = this.mass;
     newPlayer.mergeTimer = timer;
+    Partition.mutex.unlock();
     return newPlayer;
+  }
+
+  /**
+   * @param {Vector2} vector
+   * @param {SharedBufferPartition} Partition
+   * @returns {Mass}
+   */
+  eject(vector, Partition) {
+    this.mass -= 16;
+
+    Partition.mutex.lockWait();
+    const newMass = new Mass(
+      this.x + (vector.x * this.radius) / 2,
+      this.y + (vector.y * this.radius) / 2,
+      this.colour,
+      Partition
+    );
+    newMass.velX = vector.x * 5;
+    newMass.velY = vector.y * 5;
+    Partition.mutex.unlock();
+    return newMass;
   }
 
   get velX() {
@@ -400,6 +423,7 @@ class Mass extends Circle {
    * @param {number} x
    * @param {number} y
    * @param {string} colour
+   * @param {SharedBufferPartition} Partition
    */
   constructor(x, y, colour, Partition) {
     super(x, y, colour, 12, Partition);
@@ -951,6 +975,17 @@ class World extends EventEmitter {
           this.addEntities(...newPlayers);
         }
       });
+
+    for (const [uuid, mass] of Object.entries(this.mass)) {
+      mass.velX = mass.velX * 0.9 ** DeltaTime;
+      mass.velY = mass.velY * 0.9 ** DeltaTime;
+
+      mass.x += DeltaTime * mass.velX;
+      mass.y += DeltaTime * mass.velY;
+
+      mass.x = clamp(mass.x, 0, this.width);
+      mass.y = clamp(mass.y, 0, this.height);
+    }
 
     await Workers.assignAll({
       type: 1,
