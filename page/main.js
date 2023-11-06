@@ -29,7 +29,7 @@ setCanvasScale();
 let interpolator;
 
 // Mouse
-const mouseRatio = {
+const mousePos = {
   x: 0,
   y: 0,
 };
@@ -55,11 +55,8 @@ window.addEventListener("resize", setCanvasScale);
 
 // Anonymous
 cnv.addEventListener("mousemove", function ({ clientX, clientY }) {
-  const largest = Math.max(cnv.width, cnv.height);
-  mouseRatio.x =
-    (clientX * window.devicePixelRatio - this.width / 2) / (largest / 2);
-  mouseRatio.y =
-    (clientY * window.devicePixelRatio - this.height / 2) / (largest / 2);
+  mousePos.x = clientX * window.devicePixelRatio;
+  mousePos.y = clientY * window.devicePixelRatio;
 });
 
 // * Functions
@@ -257,19 +254,28 @@ function interpolatedCam(
  * @this WebSocket
  */
 async function mouseTick(mouseX, mouseY) {
-  if (!(mouseX == mouseRatio.x && mouseY == mouseRatio.y)) {
+  if (!(mouseX == mousePos.x && mouseY == mousePos.y)) {
     const mouseView = new DataView(new ArrayBuffer(16));
+    const largestSize = Math.max(cnv.width, cnv.height);
+    const scale = (largestSize / 100) * camera.camScale;
+
     this.send(
       await createMessage(
         9,
-        (mouseView.setFloat64(0, mouseRatio.x),
-        mouseView.setFloat64(8, mouseRatio.y),
+        (mouseView.setFloat64(
+          0,
+          (mousePos.x + camera.x * scale - cnv.width / 2) / scale
+        ),
+        mouseView.setFloat64(
+          8,
+          (mousePos.y + camera.y * scale - cnv.height / 2) / scale
+        ),
         mouseView.buffer)
       )
     );
   }
   if (this.readyState == 1)
-    setTimeout(mouseTick.bind(this), 100, mouseRatio.x, mouseRatio.y);
+    setTimeout(mouseTick.bind(this), 100, mousePos.x, mousePos.y);
 }
 
 /**

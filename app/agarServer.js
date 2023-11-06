@@ -96,7 +96,7 @@ function forceSplit(player, world) {
     player.mass = 11250;
   } else {
     const angle = Math.random() * Math.PI * 2;
-    const mult = 3 * Math.sqrt(player.radius) * Math.log10(player.radius);
+    const mult = 0.25 * Math.sqrt(player.radius) * Math.log10(player.radius);
     world.addEntities(
       player.split(
         {
@@ -331,15 +331,21 @@ class Player extends Circle {
     this.mass -= 16;
 
     Partition.mutex.lockWait();
+
+    const angle = Math.atan2(vector.y, vector.x);
+
     const newMass = new Mass(
-      this.x + (vector.x * this.radius) / 2,
-      this.y + (vector.y * this.radius) / 2,
+      this.x + Math.cos(angle) * this.radius,
+      this.y + Math.sin(angle) * this.radius,
       this.colour,
       Partition
     );
-    newMass.velX = vector.x * 5;
-    newMass.velY = vector.y * 5;
+
+    newMass.velX = vector.x * (this.radius / 2);
+    newMass.velY = vector.y * (this.radius / 2);
+
     Partition.mutex.unlock();
+
     return newMass;
   }
 
@@ -419,6 +425,10 @@ class Virus extends Circle {
 }
 
 class Mass extends Circle {
+  /** @type {number} */
+  velX;
+  /** @type {number} */
+  velY;
   /**
    * @param {number} x
    * @param {number} y
@@ -427,6 +437,8 @@ class Mass extends Circle {
    */
   constructor(x, y, colour, Partition) {
     super(x, y, colour, 12, Partition);
+    this.velX = 0;
+    this.velY = 0;
   }
 
   pack() {
@@ -524,14 +536,14 @@ class User extends Entity {
    * @returns {Vector2}
    */
   get mouseVector() {
-    const clampedX = this.mouse.x;
-    const clampedY = this.mouse.y;
-    const dist = Math.min(Math.hypot(clampedX, clampedY) * 14, 1);
-    const angle = Math.atan2(clampedX, clampedY);
-    return {
-      x: Math.sin(angle) * dist,
-      y: Math.cos(angle) * dist,
-    };
+    // const clampedX = this.mouse.x;
+    // const clampedY = this.mouse.y;
+    // const dist = Math.min(Math.hypot(clampedX, clampedY) * 14, 1);
+    // const angle = Math.atan2(clampedX, clampedY);
+    // return {
+    //   x: Math.sin(angle) * dist,
+    //   y: Math.cos(angle) * dist,
+    // };
   }
 
   get mouse() {
@@ -944,7 +956,8 @@ class World extends EventEmitter {
           this.killed.push(target.uuid);
 
           const player = eater.circle;
-          const mult = 3 * Math.sqrt(player.radius) * Math.log10(player.radius);
+          const mult =
+            0.25 * Math.sqrt(player.radius) * Math.log10(player.radius);
           const newPlayers = [];
           while (
             Object.keys(this.users[player.userID].players).length +

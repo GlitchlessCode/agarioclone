@@ -300,8 +300,8 @@ async function parseMessage(data, isBinary) {
             throw new Error("Rate Limit");
         }
         const user = world.users[this.id.UUID];
-        user.mouse.x = clamp(dataView.getFloat64(0), -1, 1);
-        user.mouse.y = clamp(dataView.getFloat64(8), -1, 1);
+        user.mouse.x = clamp(dataView.getFloat64(0), 0, world.width);
+        user.mouse.y = clamp(dataView.getFloat64(8), 0, world.height);
         break;
       case 10:
         // Rate Limiting
@@ -393,20 +393,21 @@ function getUser() {
 }
 
 /**
- * @this Websocket
+ * @this WebSocket
  * @param {0|1} keypress
  */
 function handleKey(keypress) {
   const user = world.users[this.id.UUID];
+  const players = Object.values(user.players);
   switch (keypress) {
     case 0:
-      if (Object.values(user.players).length >= 16) break;
-      for (const player of Object.values(user.players)) {
-        if (player.mass >= 35 && Object.values(user.players).length < 16) {
+      if (players.length >= 16) break;
+      for (const player of players) {
+        if (player.mass >= 35 && players.length < 16) {
           player._Partition.mutex.lockWait();
-          const { x, y } = user.mouseVector;
+          const { x, y } = user.mouse;
           const mult =
-            2.6 * Math.sqrt(player.radius) * Math.log10(player.radius);
+            0.25 * Math.sqrt(player.radius) * Math.log10(player.radius);
           world.addEntities(
             player.split(
               { x: x * mult, y: y * mult },
@@ -419,20 +420,24 @@ function handleKey(keypress) {
       break;
     case 1:
       const { mass } = SHARED_MEMORY_PARTITIONS;
-      for (const player of Object.values(user.players)) {
+      for (const player of players) {
         if (player.mass >= 35) {
           const length = Object.values(world.mass).length;
           if (length + 1 > mass.count) {
-            const culled = Object.values(world.mass)[length * Math.random()];
+            const culled = Object.values(world.mass)[
+              Math.floor(length * Math.random())
+            ];
             world.mem.mass.deallocate(culled.kill());
             delete world.mass[culled.uuid.UUID];
             delete world.entities[culled.uuid.UUID];
+            world.killed.push(culled.uuid);
           }
           player._Partition.mutex.lockWait();
-          const { x, y } = user.mouseVector;
+          const { x, y } = user.mouse;
           world.addEntities(
             player.eject({ x: x, y: y }, world.mem.mass.allocate())
           );
+
           player._Partition.mutex.unlock();
         }
       }
@@ -480,33 +485,36 @@ function* createData() {
     return a[1].different;
   })) {
     yield new Promise(async function (resolve, reject) {
-      try {
-        const infoView = new DataView(new ArrayBuffer(24));
-        const colourValue = colour(entity.colour);
-
-        let params = [new Uint8Array([getType(entity)]), infoView.buffer];
-        infoView.setFloat64(0, entity.x);
-        infoView.setFloat64(8, entity.y);
-        infoView.setFloat32(16, entity.radius);
-        infoView.setUint8(20, colourValue[0]);
-        infoView.setUint8(21, colourValue[1]);
-        infoView.setUint8(22, colourValue[2]);
-
-        if (entity instanceof Player) {
-          const user = world.users[entity.userID];
-          const nameLength = user.name.buff.byteLength;
-          infoView.setUint8(23, nameLength);
-          params.push(user.name.buff);
-        }
-
-        params.push(entity.uuid.buff);
-
-        const data = await new Blob(params).arrayBuffer();
-        resolve(data);
-      } catch (error) {
-        resolve(await new Blob([new Uint8Array([])]).arrayBuffer());
-      }
+      resolve(await getEntity(entity));
     });
+  }
+}
+
+async function getEntity(entity) {
+  try {
+    const infoView = new DataView(new ArrayBuffer(24));
+    const colourValue = colour(entity.colour);
+
+    let params = [new Uint8Array([getType(entity)]), infoView.buffer];
+    infoView.setFloat64(0, entity.x);
+    infoView.setFloat64(8, entity.y);
+    infoView.setFloat32(16, entity.radius);
+    infoView.setUint8(20, colourValue[0]);
+    infoView.setUint8(21, colourValue[1]);
+    infoView.setUint8(22, colourValue[2]);
+
+    if (entity instanceof Player) {
+      const user = world.users[entity.userID];
+      const nameLength = user.name.buff.byteLength;
+      infoView.setUint8(23, nameLength);
+      params.push(user.name.buff);
+    }
+
+    params.push(entity.uuid.buff);
+
+    return await new Blob(params).arrayBuffer();
+  } catch (error) {
+    return await new Blob([new Uint8Array([])]).arrayBuffer();
   }
 }
 

@@ -7,7 +7,7 @@
 6: World Finished (end)
 7: Ready For Tick []
 8: Tick [itemNum(4), killedNum(4), userPosx(8), userPosy(8), userScale(4) [itemNType(1) {0: Player, 1: Virus, 2: Food, 3: Mass}, itemNPosx (8), itemNPosy(8), itemNRadius(4), itemNColour(3), itemNNameLength(1), itemNName(0-255), itemNUuid(32)]...]
-9: Mouse [mouseX {(-1) to (1)} (8), mouseY {(-1) to (1)} (8)]
+9: Mouse [mouseX (8), mouseY (8)]
 10: Input Event [type(1)]
 
 16: User Death []

@@ -175,6 +175,12 @@ class FoodInterface extends CircleInterface {
   }
 }
 
+class MassInterface extends CircleInterface {
+  constructor() {
+    super();
+  }
+}
+
 class UserInterface extends EntityInterface {
   constructor() {
     super();
@@ -277,6 +283,7 @@ const Player = new PlayerInterface();
 const Player2 = new PlayerInterface();
 const Virus = new VirusInterface();
 const Food = new FoodInterface();
+const Mass = new MassInterface();
 const User = new UserInterface();
 // * End of Setup
 
@@ -353,19 +360,13 @@ function updatePlayer(player, user, DeltaTime) {
       Number.MAX_SAFE_INTEGER
     );
 
-  player.velX = player.velX * 0.9 ** DeltaTime;
-  player.velY = player.velY * 0.9 ** DeltaTime;
-
-  const cohesionAngle = Math.atan2(user.y - player.y, user.x - player.x);
-  const cohesionStrength = Math.min(player.getDistance(user) / 10, 1);
-
-  const cohereX = Math.cos(cohesionAngle) * cohesionStrength;
-  const cohereY = Math.sin(cohesionAngle) * cohesionStrength;
+  player.velX = player.velX * 0.85 ** DeltaTime;
+  player.velY = player.velY * 0.85 ** DeltaTime;
 
   const speed = 8 / (player.radius * 10) + 0.13;
 
-  player.x += (speed * user.mouseVector.x + player.velX + cohereX) * DeltaTime;
-  player.y += (speed * user.mouseVector.y + player.velY + cohereY) * DeltaTime;
+  player.x += (speed * user.mouseVector.x + player.velX) * DeltaTime;
+  player.y += (speed * user.mouseVector.y + player.velY) * DeltaTime;
 
   if (player.x < 0 || player.x > world.width) player.velX = 0;
   if (player.y < 0 || player.y > world.height) player.velY = 0;
@@ -418,7 +419,12 @@ function collisionSim({ larger, smaller, DeltaTime, index }) {
       const partitionA = PARTITIONS.player[larger.index];
       const partitionB = PARTITIONS.virus[smaller.index];
 
-      duoLock(larger.index, partitionA, smaller.index, partitionB);
+      duoLock(
+        larger.index,
+        partitionA,
+        smaller.index + player.count,
+        partitionB
+      );
 
       Player.setPartition(partitionA);
       Virus.setPartition(partitionB);
@@ -435,7 +441,12 @@ function collisionSim({ larger, smaller, DeltaTime, index }) {
       const partitionA = PARTITIONS.player[larger.index];
       const partitionB = PARTITIONS.food[smaller.index];
 
-      duoLock(larger.index, partitionA, smaller.index + 4160, partitionB);
+      duoLock(
+        larger.index,
+        partitionA,
+        smaller.index + player.count + virus.count,
+        partitionB
+      );
 
       Player.setPartition(partitionA);
       Food.setPartition(partitionB);
@@ -449,7 +460,25 @@ function collisionSim({ larger, smaller, DeltaTime, index }) {
     }
     case 3: {
       // (0<<2 = 0) + 3 = 3
-      return playerMass(DeltaTime);
+      const partitionA = PARTITIONS.player[larger.index];
+      const partitionB = PARTITIONS.mass[smaller.index];
+
+      duoLock(
+        larger.index,
+        partitionA,
+        smaller.index + player.count + virus.count + food.count,
+        partitionB
+      );
+
+      Player.setPartition(partitionA);
+      Mass.setPartition(partitionB);
+
+      const result = playerMass(Player, Mass, DeltaTime, index);
+
+      partitionA.mutex.unlock();
+      partitionB.mutex.unlock();
+
+      return result;
     }
     case 7: {
       // (1<<2 = 4) + 3 = 7
@@ -459,7 +488,7 @@ function collisionSim({ larger, smaller, DeltaTime, index }) {
 }
 
 function getForce(percent, radius) {
-  return -Math.max(0.025, radius ** percent - 1) * 0.2;
+  return -Math.max(0.025, radius ** percent - 1) * 0.1;
 }
 
 /**
@@ -534,6 +563,9 @@ function playerFood(larger, smaller, DeltaTime, index) {
   return result;
 }
 
-function playerMass(larger, smaller, DeltaTime, index) {}
+function playerMass(larger, smaller, DeltaTime, index) {
+  if (!larger.encloses(smaller)) return;
+  console.log("Eat");
+}
 
 function virusMass(larger, smaller, DeltaTime, index) {}
