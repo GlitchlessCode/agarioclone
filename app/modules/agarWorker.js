@@ -1,3 +1,7 @@
+/**
+ * @typedef {{x: number, y:number}} Vector2
+ */
+
 /** @type {{parentPort:MessagePort, threadId:number, workerData:SharedArrayBuffer}} */
 const path = require("path");
 const { parentPort, threadId, workerData } = require("worker_threads");
@@ -38,17 +42,32 @@ class EntityInterface {
   }
 
   /**
-   * @param {EntityInterface} entity
+   * @param {Vector2} entity
+   * @returns {number}
    */
   getDistance(entity) {
     return Math.hypot(this.x - entity.x, this.y - entity.y);
   }
 
   /**
-   * @param {EntityInterface} entity
+   * @param {Vector2} entity
+   * @returns {number}
    */
   getAngle(entity) {
     return Math.atan2(entity.y - this.y, entity.x - this.x);
+  }
+
+  /**
+   * @param {Vector2} entity
+   * @returns {Vector2}
+   */
+  getVector(entity, max) {
+    const angle = this.getAngle(entity);
+    const dist = clamp(this.getDistance(entity), 0, max);
+    return {
+      x: Math.cos(angle) * dist,
+      y: Math.sin(angle) * dist,
+    };
   }
 }
 
@@ -184,24 +203,6 @@ class MassInterface extends CircleInterface {
 class UserInterface extends EntityInterface {
   constructor() {
     super();
-  }
-
-  /**
-   * @typedef {{x: number, y:number}} Vector2
-   */
-
-  /**
-   * @returns {Vector2}
-   */
-  get mouseVector() {
-    const clampedX = this.mouse.x;
-    const clampedY = this.mouse.y;
-    const dist = Math.min(Math.hypot(clampedX, clampedY) * 14, 1);
-    const angle = Math.atan2(clampedX, clampedY);
-    return {
-      x: Math.sin(angle) * dist,
-      y: Math.cos(angle) * dist,
-    };
   }
 
   get mouse() {
@@ -363,10 +364,12 @@ function updatePlayer(player, user, DeltaTime) {
   player.velX = player.velX * 0.85 ** DeltaTime;
   player.velY = player.velY * 0.85 ** DeltaTime;
 
-  const speed = 8 / (player.radius * 10) + 0.13;
+  const speed = (0.5 * 0.91 ** player.radius + 0.13) / 2;
 
-  player.x += (speed * user.mouseVector.x + player.velX) * DeltaTime;
-  player.y += (speed * user.mouseVector.y + player.velY) * DeltaTime;
+  const mouse = player.getVector(user.mouse, 1);
+
+  player.x += (speed * mouse.x + player.velX) * DeltaTime;
+  player.y += (speed * mouse.y + player.velY) * DeltaTime;
 
   if (player.x < 0 || player.x > world.width) player.velX = 0;
   if (player.y < 0 || player.y > world.height) player.velY = 0;
@@ -496,7 +499,6 @@ function getForce(percent, radius) {
  * @param {PlayerInterface} smaller
  * @param {number} DeltaTime
  * @param {number} index
- * @returns
  */
 function playerPlayer(larger, smaller, DeltaTime, index) {
   if (larger.userIndex == smaller.userIndex) {
@@ -508,7 +510,7 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
     ) {
       // * User is the same And Cannot Merge
       const separation = getForce(
-        larger.getOverlap(smaller) / smaller.mass,
+        clamp(larger.getOverlap(smaller) / smaller.mass - 0.05, 0, 1),
         larger.radius
       );
       if (
@@ -517,10 +519,13 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
       )
         return;
       const angle = Math.atan2(larger.y - smaller.y, larger.x - smaller.x);
-      smaller.velX += Math.cos(angle) * separation * DeltaTime;
-      smaller.velY += Math.sin(angle) * separation * DeltaTime;
-      larger.velX += Math.cos(angle + Math.PI) * separation * DeltaTime;
-      larger.velY += Math.sin(angle + Math.PI) * separation * DeltaTime;
+      const ratio = smaller.mass / larger.mass;
+      smaller.velX +=
+        Math.cos(angle) * separation * (1 - ratio) * 2 * DeltaTime;
+      smaller.velY +=
+        Math.sin(angle) * separation * (1 - ratio) * 2 * DeltaTime;
+      larger.velX += Math.cos(angle + Math.PI) * separation * ratio * DeltaTime;
+      larger.velY += Math.sin(angle + Math.PI) * separation * ratio * DeltaTime;
     } else {
       // * Can Merge
       const overlap = larger.getOverlap(smaller) / smaller.mass;
@@ -539,6 +544,12 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
   }
 }
 
+/**
+ * @param {PlayerInterface} larger
+ * @param {VirusInterface} smaller
+ * @param {number} DeltaTime
+ * @param {number} index
+ */
 function playerVirus(larger, smaller, DeltaTime, index) {
   if (larger.mass > smaller.mass * 1.1) {
     const overlap = larger.getOverlap(smaller) / smaller.mass;
@@ -553,7 +564,6 @@ function playerVirus(larger, smaller, DeltaTime, index) {
  * @param {FoodInterface} smaller
  * @param {number} DeltaTime
  * @param {number} index
- * @returns {undefined|[number, number, string]}
  */
 function playerFood(larger, smaller, DeltaTime, index) {
   if (!larger.encloses(smaller)) return;
@@ -563,9 +573,20 @@ function playerFood(larger, smaller, DeltaTime, index) {
   return result;
 }
 
+/**
+ * @param {PlayerInterface} larger
+ * @param {MassInterface} smaller
+ * @param {number} DeltaTime
+ * @param {number} index
+ */
 function playerMass(larger, smaller, DeltaTime, index) {
-  if (!larger.encloses(smaller)) return;
-  console.log("Eat");
+  const overlap = larger.getOverlap(smaller) / smaller.mass;
+  if (overlap > 0.75) {
+    larger.mass += 12;
+    const result = [[index, 1, "kill"]];
+    if (larger.mass > 11250) result.push([index, 0, "force_split"]);
+    return result;
+  }
 }
 
 function virusMass(larger, smaller, DeltaTime, index) {}

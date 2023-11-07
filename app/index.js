@@ -405,7 +405,7 @@ function handleKey(keypress) {
       for (const player of players) {
         if (player.mass >= 35 && players.length < 16) {
           player._Partition.mutex.lockWait();
-          const { x, y } = user.mouse;
+          const { x, y } = player.getVector(user.mouse, 1);
           const mult =
             0.25 * Math.sqrt(player.radius) * Math.log10(player.radius);
           world.addEntities(
@@ -433,7 +433,7 @@ function handleKey(keypress) {
             world.killed.push(culled.uuid);
           }
           player._Partition.mutex.lockWait();
-          const { x, y } = user.mouse;
+          const { x, y } = player.getVector(user.mouse, 1);
           world.addEntities(
             player.eject({ x: x, y: y }, world.mem.mass.allocate())
           );

@@ -1,3 +1,7 @@
+/**
+ * @typedef {{x: number, y:number}} Vector2
+ */
+
 const crypto = require("crypto");
 const { SharedBufferPartition } = require("./modules/sharedData");
 const { EventEmitter } = require("stream");
@@ -141,17 +145,32 @@ class Entity {
   }
 
   /**
-   * @param {Entity} entity
+   * @param {Vector2} entity
+   * @returns {number}
    */
   getDistance(entity) {
     return Math.hypot(this.x - entity.x, this.y - entity.y);
   }
 
   /**
-   * @param {Entity} entity
+   * @param {Vector2} entity
+   * @returns {number}
    */
   getAngle(entity) {
     return Math.atan2(entity.y - this.y, entity.x - this.x);
+  }
+
+  /**
+   * @param {Vector2} entity
+   * @returns {Vector2}
+   */
+  getVector(entity, max) {
+    const angle = this.getAngle(entity);
+    const dist = clamp(this.getDistance(entity), 0, max);
+    return {
+      x: Math.cos(angle) * dist,
+      y: Math.sin(angle) * dist,
+    };
   }
 
   get x() {
@@ -528,24 +547,6 @@ class User extends Entity {
     };
   }
 
-  /**
-   * @typedef {{x: number, y:number}} Vector2
-   */
-
-  /**
-   * @returns {Vector2}
-   */
-  get mouseVector() {
-    // const clampedX = this.mouse.x;
-    // const clampedY = this.mouse.y;
-    // const dist = Math.min(Math.hypot(clampedX, clampedY) * 14, 1);
-    // const angle = Math.atan2(clampedX, clampedY);
-    // return {
-    //   x: Math.sin(angle) * dist,
-    //   y: Math.cos(angle) * dist,
-    // };
-  }
-
   get mouse() {
     const ref = this;
     return {
@@ -562,27 +563,6 @@ class User extends Entity {
         ref._Partition.data.setFloat32(20, val);
       },
     };
-  }
-
-  pack(bitmask) {
-    let result = {};
-    if (bitmask & 0b0001) {
-      // x
-      result.x = this.x;
-    }
-    if (bitmask & 0b0010) {
-      // y
-      result.y = this.y;
-    }
-    if (bitmask & 0b0100) {
-      // uuid
-      result.uuid = this.uuid.UUID;
-    }
-    if (bitmask & 0b1000) {
-      // mouseVector
-      result.mouseVector = this.mouseVector;
-    }
-    return result;
   }
 }
 
@@ -1015,7 +995,7 @@ class World extends EventEmitter {
           (user.bounds.bottom - user.bounds.top) * 1.1,
           (user.bounds.right - user.bounds.left) * 1.1
         ) +
-          100);
+          75);
 
       // Clamp (just in case)
       user.x = clamp(user.x, 0, this.width);
