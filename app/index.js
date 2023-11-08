@@ -1,4 +1,5 @@
 // Import Statements
+const readline = require("readline");
 const express = require("express");
 const ws = require("ws");
 const path = require("path");
@@ -29,6 +30,8 @@ const worldParams = [
   SHARED_MEMORY,
   SHARED_MEMORY_PARTITIONS,
 ];
+
+let run = true;
 
 class Deferred {
   /** @type {function} */
@@ -169,6 +172,11 @@ class Workers {
   }
   static get length() {
     return this.#workers.length;
+  }
+  static killAll() {
+    this.#workers.forEach(({ worker }) => {
+      worker.terminate();
+    });
   }
 }
 
@@ -538,6 +546,7 @@ let max = 0;
  */
 async function gameTick(depth, tickData, prevTime) {
   const start = Date.now();
+  if (depth == 0) console.log("tick");
   if (wsServer.clients.size !== 0) {
     // Update World
     await world.update((Date.now() - prevTime) / 25, Workers);
@@ -555,7 +564,46 @@ async function gameTick(depth, tickData, prevTime) {
     }
     world.reset();
   }
-  setTimeout(gameTick, 50, (depth + 1) % 2, depth == 0 ? [] : tickData, start);
+  if (run)
+    setTimeout(
+      gameTick,
+      50,
+      (depth + 1) % 2,
+      depth == 0 ? [] : tickData,
+      start
+    );
 }
 
-setTimeout(gameTick, 50, 0, [], Date.now());
+function readLineAsync() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+  });
+
+  return new Promise((resolve) => {
+    rl.prompt();
+    rl.on("line", (line) => {
+      rl.close();
+      resolve(line);
+    });
+  });
+}
+
+(async () => {
+  setTimeout(gameTick, 50, 0, [], Date.now());
+  console.log("Press Enter to exit");
+  await readLineAsync();
+  run = false;
+  for (const [uuid, client] of Object.entries(clients)) {
+    client.send(await createMessage(255));
+    client.close();
+    delete clients[uuid];
+    world.mem.user.deallocate(world.users[uuid].kill());
+  }
+  wsServer.close();
+  server.close();
+  Workers.killAll();
+
+  console.log(`Goodbye!`);
+
+  process.exit();
+})();

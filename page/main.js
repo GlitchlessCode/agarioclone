@@ -233,7 +233,7 @@ function interpolatedCam(
   camera.y = (depth / divide) * startY + (1 - depth / divide) * targetY;
   camera.camScale =
     (depth / divide) * startScale + (1 - depth / divide) * targetScale;
-  world.interpolate(depth / divide);
+  world.interpolate(depth / divide, depth == 9);
   if (depth > 0) {
     interpolator = setTimeout(
       interpolatedCam,

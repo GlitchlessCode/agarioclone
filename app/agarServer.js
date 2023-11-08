@@ -880,8 +880,17 @@ class World extends EventEmitter {
             }
             break;
           }
+          case "different": {
+            circle.different = true;
+            break;
+          }
           case "force_split": {
             forceSplit(circle, this);
+            break;
+          }
+          case "virus_pop": {
+            console.log("virusPop");
+            break;
           }
         }
       });

@@ -485,7 +485,25 @@ function collisionSim({ larger, smaller, DeltaTime, index }) {
     }
     case 7: {
       // (1<<2 = 4) + 3 = 7
-      return virusMass(DeltaTime);
+      const partitionA = PARTITIONS.virus[larger.index];
+      const partitionB = PARTITIONS.mass[smaller.index];
+
+      duoLock(
+        larger.index + player.count,
+        partitionA,
+        smaller.index + player.count + virus.count + food.count,
+        partitionB
+      );
+
+      Virus.setPartition(partitionA);
+      Mass.setPartition(partitionB);
+
+      const result = virusMass(Virus, Mass, DeltaTime, index);
+
+      partitionA.mutex.unlock();
+      partitionB.mutex.unlock();
+
+      return result;
     }
   }
 }
@@ -589,4 +607,15 @@ function playerMass(larger, smaller, DeltaTime, index) {
   }
 }
 
-function virusMass(larger, smaller, DeltaTime, index) {}
+function virusMass(larger, smaller, DeltaTime, index) {
+  const overlap = larger.getOverlap(smaller) / smaller.mass;
+  if (overlap > 0.3) {
+    larger.mass += 12;
+    const result = [
+      [index, 1, "kill"],
+      [index, 0, "different"],
+    ];
+    if (larger.mass >= 184) result.push([index, 0, "virus_pop"]);
+    return result;
+  }
+}

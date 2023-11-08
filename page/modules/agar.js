@@ -50,6 +50,8 @@ class Entity {
   #name;
   /** @type {number} */
   #type;
+  /** @type {boolean} */
+  #updated;
   /**
    * @param {number} x
    * @param {number} y
@@ -73,6 +75,7 @@ class Entity {
     this.#prevRadius = radius;
     this.#currRadius = radius;
     this.#type = type;
+    this.#updated = true;
   }
 
   get uuid() {
@@ -102,19 +105,30 @@ class Entity {
   set x(newVal) {
     this.#prevX = this.#trueX;
     this.#currX = newVal;
+    this.#updated = true;
   }
 
   set y(newVal) {
     this.#prevY = this.#trueY;
     this.#currY = newVal;
+    this.#updated = true;
   }
 
   set radius(newVal) {
     this.#prevRadius = this.#trueRadius;
     this.#currRadius = newVal;
+    this.#updated = true;
   }
 
-  interpolate(delta) {
+  interpolate(delta, lock) {
+    if (lock) {
+      if (!this.#updated) {
+        this.#prevX = this.#currX;
+        this.#prevY = this.#currY;
+        this.#prevRadius = this.#currRadius;
+      }
+      this.#updated = false;
+    }
     this.#trueX = delta * this.#prevX + (1 - delta) * this.#currX;
     this.#trueY = delta * this.#prevY + (1 - delta) * this.#currY;
     this.#trueRadius =
@@ -309,9 +323,13 @@ class World {
     this.#toKill = killed;
   }
 
-  interpolate(delta) {
+  /**
+   * @param {number} delta
+   * @param {boolean} lock
+   */
+  interpolate(delta, lock) {
     for (const [uuid, entity] of Object.entries(this.#entities)) {
-      entity.interpolate(delta);
+      entity.interpolate(delta, lock);
     }
   }
 
