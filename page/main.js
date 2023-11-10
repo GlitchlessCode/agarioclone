@@ -1,5 +1,5 @@
 // * Import Statements
-import Entities, { World, Camera } from "./modules/agar.js";
+import Entities, { World, Camera, Leaderboard } from "./modules/agar.js";
 //* Classes
 class Deferred {
   /** @type {function} */
@@ -37,6 +37,9 @@ const mousePos = {
 // Camera
 const camera = new Camera(0, 0, ctx);
 
+// Leaderboard
+const leaderboard = new Leaderboard(ctx, 0.6, 0.6, 0.5, 0.2);
+
 // World
 /** @type {World} */
 let world;
@@ -69,6 +72,7 @@ function drawFrame() {
   ctx.fillStyle = "#ddddee";
   ctx.fillRect(0, 0, cnv.width, cnv.height);
   camera.draw();
+  leaderboard.draw();
 
   if (Alive) requestAnimationFrame(drawFrame);
 }
@@ -101,10 +105,12 @@ async function createMessage(status, ...data) {
 let prevTime = 0;
 /**
  * @this {WebSocket}
- * @param {{data:Blob}} param0
+ * @param {Blob} data
+ * @param {string} name
  */
-async function parseMessage({ data }) {
+async function parseMessage(data, name) {
   if (!(data instanceof Blob)) throw new Error("data is not of type Blob");
+  if (typeof name !== "string") throw new Error("name is not of type string");
   const dataView = new DataView((await data.arrayBuffer()).slice(1));
   switch (new Uint8Array(await data.arrayBuffer())[0]) {
     case 8:
@@ -122,13 +128,24 @@ async function parseMessage({ data }) {
         dataView.getFloat32(24),
         9
       );
-      const [entityInfo, killed] = getEntities(dataView);
+      const [entityInfo, killed, syncVal] = getEntities(dataView);
       world.update(entityInfo);
       world.kill(killed);
+      if (syncVal) {
+        const synced = world.checkSync(syncVal);
+        if (!synced) this.send(await createMessage(11));
+      }
       prevTime = Date.now();
+      break;
+    case 14:
+      leaderboard.leaders = getLeaders(dataView);
+      break;
+    case 12:
+      world.resync(deconstructResync(dataView));
       break;
     case 0:
       console.log("init");
+      this.send(await createMessage(15, new TextEncoder().encode(name)));
       this.send(await createMessage(0));
       break;
     case 2:
@@ -186,6 +203,7 @@ async function parseMessage({ data }) {
     case 6:
       console.log("worldFinished");
       camera.changeWorld(world);
+      leaderboard.show = true;
       this.send(await createMessage(7));
       prevTime = Date.now();
       setTimeout(mouseTick.bind(this), 100);
@@ -253,29 +271,27 @@ function interpolatedCam(
 /**
  * @this WebSocket
  */
-async function mouseTick(mouseX, mouseY) {
-  if (!(mouseX == mousePos.x && mouseY == mousePos.y)) {
-    const mouseView = new DataView(new ArrayBuffer(16));
-    const largestSize = Math.max(cnv.width, cnv.height);
-    const scale = (largestSize / 100) * camera.camScale;
+async function mouseTick() {
+  const mouseView = new DataView(new ArrayBuffer(16));
+  const largestSize = Math.max(cnv.width, cnv.height);
+  const scale = (largestSize / 100) * camera.camScale;
 
-    this.send(
-      await createMessage(
-        9,
-        (mouseView.setFloat64(
-          0,
-          (mousePos.x + camera.x * scale - cnv.width / 2) / scale
-        ),
-        mouseView.setFloat64(
-          8,
-          (mousePos.y + camera.y * scale - cnv.height / 2) / scale
-        ),
-        mouseView.buffer)
-      )
-    );
-  }
-  if (this.readyState == 1)
-    setTimeout(mouseTick.bind(this), 100, mousePos.x, mousePos.y);
+  this.send(
+    await createMessage(
+      9,
+      (mouseView.setFloat64(
+        0,
+        (mousePos.x + camera.x * scale - cnv.width / 2) / scale
+      ),
+      mouseView.setFloat64(
+        8,
+        (mousePos.y + camera.y * scale - cnv.height / 2) / scale
+      ),
+      mouseView.buffer)
+    )
+  );
+
+  if (this.readyState == 1) setTimeout(mouseTick.bind(this), 100);
 }
 
 /**
@@ -341,12 +357,105 @@ function getEntities(dataSet) {
       )
     );
   }
+  if (
+    60 +
+      nameOffset +
+      dataSet.getUint32(0) * BUFFERSIZE +
+      (dataSet.getUint32(4) - 1) * 32 !==
+    dataSet.byteLength
+  ) {
+    const syncVal = dataSet.getUint32(
+      60 +
+        nameOffset +
+        dataSet.getUint32(0) * BUFFERSIZE +
+        (dataSet.getUint32(4) - 1) * 32
+    );
+    return [entities, killed, syncVal];
+  }
   return [entities, killed];
+}
+
+/**
+ * @param {DataView} dataSet
+ */
+function deconstructResync(dataSet) {
+  const entityCount = dataSet.getUint32(0);
+
+  const entities = [];
+  let nameOffset = 0;
+
+  for (let i = 0; i < entityCount; i++) {
+    const entityView = new DataView(
+      dataSet.buffer.slice(4 + nameOffset + i * BUFFERSIZE)
+    );
+    nameOffset += entityView.getUint8(24);
+    entities.push({
+      type: entityView.getUint8(0),
+      x: entityView.getFloat64(1),
+      y: entityView.getFloat64(9),
+      radius: entityView.getFloat32(17),
+      colour: colour(
+        entityView.getUint8(21),
+        entityView.getUint8(22),
+        entityView.getUint8(23)
+      ),
+      name: utf8.decode(
+        entityView.buffer.slice(25, 25 + entityView.getUint8(24))
+      ),
+      uuid: uuid(entityView.buffer.slice(25 + entityView.getUint8(24))),
+    });
+  }
+
+  return entities;
+}
+
+/**
+ * @param {DataView} dataSet
+ */
+function getLeaders(dataSet) {
+  const leaderCount = dataSet.getUint8(0);
+
+  const leaders = [];
+  let nameOffset = 0;
+
+  for (let i = 0; i < leaderCount; i++) {
+    const leaderView = new DataView(
+      dataSet.buffer.slice(1 + nameOffset + i * 5)
+    );
+    nameOffset += leaderView.getUint8(4);
+    const leaderData = {
+      mass: leaderView.getUint32(0),
+      name: utf8.decode(leaderView.buffer.slice(5, 5 + leaderView.getUint8(4))),
+    };
+    if (leaderData.name == "") leaderData.name = "An unnamed cell";
+    leaders.push(leaderData);
+  }
+
+  return leaders;
 }
 
 // When window is loaded
 window.onload = async function () {
-  let resolver = new Deferred();
+  requestAnimationFrame(drawFrame);
+  const nameWait = new Deferred();
+
+  const modal = document.querySelector("dialog");
+  modal.showModal();
+
+  const confirmBtn = modal.querySelector("button");
+  confirmBtn.addEventListener("click", function buttonClick() {
+    const input = modal.querySelector("input").value.trim();
+    if (input.length > 18) {
+      document.documentElement.style.setProperty("--input-color", "#f77");
+      return;
+    }
+    modal.close();
+    nameWait.resolve(input);
+    this.removeEventListener("click", buttonClick);
+  });
+
+  /** @type {string} */
+  const name = await nameWait.promise;
   const ws = new WebSocket(
     `${location.protocol == "http:" ? "ws" : "wss"}://${location.host}`
   );
@@ -354,12 +463,11 @@ window.onload = async function () {
   ws.progress = 0;
   ws.addEventListener("open", function () {
     console.log("Connection Established!");
-    resolver.resolve();
   });
-  ws.addEventListener("message", parseMessage.bind(ws));
+  ws.addEventListener("message", ({ data }) => {
+    parseMessage.bind(ws, data, name)();
+  });
   ws.addEventListener("close", function () {
     console.log("Connection Closed!");
   });
-  await resolver.promise;
-  requestAnimationFrame(drawFrame);
 };

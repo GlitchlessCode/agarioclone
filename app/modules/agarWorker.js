@@ -5,7 +5,7 @@
 /** @type {{parentPort:MessagePort, threadId:number, workerData:SharedArrayBuffer}} */
 const path = require("path");
 const { parentPort, threadId, workerData } = require("worker_threads");
-const { SHARED_MEMORY_PARTITIONS } = require("./bufferConfig");
+const { SHARED_MEMORY_PARTITIONS, WORLD_SETTINGS } = require("./config");
 const { SharedBufferPartition, MutexError } = require("./sharedData");
 const SHARED_MEMORY = new Uint8Array(workerData.buff);
 const world = {
@@ -361,8 +361,8 @@ function updatePlayer(player, user, DeltaTime) {
       Number.MAX_SAFE_INTEGER
     );
 
-  player.velX = player.velX * 0.85 ** DeltaTime;
-  player.velY = player.velY * 0.85 ** DeltaTime;
+  player.velX = player.velX * WORLD_SETTINGS.drag ** DeltaTime;
+  player.velY = player.velY * WORLD_SETTINGS.drag ** DeltaTime;
 
   const speed = (0.5 * 0.91 ** player.radius + 0.13) / 2;
 
@@ -528,7 +528,7 @@ function playerPlayer(larger, smaller, DeltaTime, index) {
     ) {
       // * User is the same And Cannot Merge
       const separation = getForce(
-        clamp(larger.getOverlap(smaller) / smaller.mass - 0.05, 0, 1),
+        larger.getOverlap(smaller) / smaller.mass,
         larger.radius
       );
       if (

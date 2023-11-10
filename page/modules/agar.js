@@ -120,6 +120,10 @@ class Entity {
     this.#updated = true;
   }
 
+  get syncVal() {
+    return this.#currX;
+  }
+
   interpolate(delta, lock) {
     if (lock) {
       if (!this.#updated) {
@@ -210,7 +214,7 @@ class World {
   #width;
   /** @type {bigint} */
   #height;
-  /** @type {PseudoEntity[]} */
+  /** @type {string[]} */
   #toKill;
 
   /**
@@ -316,7 +320,7 @@ class World {
   }
 
   /**
-   * @param {PseudoEntity[]} killed
+   * @param {string[]} killed
    */
   kill(killed) {
     this.#toKill.forEach((uuid) => delete this.#entities[uuid]);
@@ -330,6 +334,64 @@ class World {
   interpolate(delta, lock) {
     for (const [uuid, entity] of Object.entries(this.#entities)) {
       entity.interpolate(delta, lock);
+    }
+  }
+
+  /**
+   * @param {number} syncVal
+   */
+  checkSync(syncVal) {
+    let total = 0;
+    for (const entity of Object.values(this.#entities)) {
+      if (this.#toKill.includes(entity.uuid)) continue;
+      total += Math.round(entity.syncVal * 10);
+    }
+    return syncVal == total;
+  }
+
+  /**
+   * @param {PseudoEntity[]} EntityInfo
+   */
+  resync(EntityInfo) {
+    console.log("resyncing");
+    const UuidList = Object.values(this.#entities).map((a) => a.uuid);
+    const entities = [];
+    for (const pseudoEntity of EntityInfo) {
+      if (Object.hasOwn(this.#entities, pseudoEntity.uuid)) {
+        UuidList.splice(UuidList.indexOf(pseudoEntity.uuid), 1);
+        const entity = this.#entities[pseudoEntity.uuid];
+        entity.x = pseudoEntity.x;
+        entity.y = pseudoEntity.y;
+        entity.radius = pseudoEntity.radius;
+      } else {
+        const params = [
+          pseudoEntity.x,
+          pseudoEntity.y,
+          pseudoEntity.radius,
+          pseudoEntity.colour,
+          pseudoEntity.name,
+          pseudoEntity.uuid,
+        ];
+        switch (pseudoEntity.type) {
+          case 0:
+            entities.push(new Player(...params));
+            break;
+          case 1:
+            entities.push(new Virus(...params));
+            break;
+          case 2:
+            entities.push(new Food(...params));
+            break;
+          case 3:
+            entities.push(new Mass(...params));
+            break;
+        }
+      }
+    }
+    this.addEntities(...entities);
+
+    for (const culledUUID of UuidList) {
+      delete this.#entities[culledUUID];
     }
   }
 
@@ -545,5 +607,88 @@ class Camera {
   }
 }
 
-export { World, Camera };
+class Leaderboard {
+  /** @type {CanvasRenderingContext2D} */
+  ctx;
+  /** @type {HTMLCanvasElement} */
+  cnv;
+  /** @type {number} */
+  margin;
+  /** @type {number} */
+  padding;
+  /** @type {number} */
+  gap;
+  /** @type {number} */
+  leading;
+  /** @type {boolean} */
+  show;
+  /** @type {{name: string, mass: number}[]} */
+  leaders;
+
+  /**
+   * @param {CanvasRenderingContext2D} context
+   * @param {number} margin
+   * @param {number} padding
+   * @param {number} gap
+   * @param {number} leading
+   */
+  constructor(context, margin, padding, gap, leading) {
+    this.ctx = context;
+    this.cnv = context.canvas;
+    this.show = false;
+    this.margin = margin;
+    this.padding = padding;
+    this.gap = gap;
+    this.leading = leading;
+    this.leaders = [];
+  }
+
+  draw() {
+    if (!this.show) return;
+
+    const largestSize = Math.max(this.cnv.width, this.cnv.height);
+    const scale = largestSize / 100;
+
+    const margin = this.margin * scale;
+    const padding = this.padding * scale;
+    const gap = this.gap * scale;
+    const leading = this.leading * scale;
+
+    this.ctx.font = `bold ${scale / 1.4}px sans-serif`;
+
+    const nameMetrics = this.ctx.measureText("WWWWWWWWWWWWWWWWWW");
+    const countMetrics = this.ctx.measureText("888888");
+    const totalWidth = gap + nameMetrics.width + countMetrics.width;
+    const totalHeight = (scale / 1.4) * 10 + leading * 9;
+
+    this.ctx.fillStyle = "#0007";
+    this.ctx.fillRect(
+      this.cnv.width - (totalWidth + padding * 2) - margin,
+      margin,
+      totalWidth + padding * 2,
+      totalHeight + padding * 2
+    );
+
+    this.ctx.textBaseline = "top";
+    this.ctx.fillStyle = "#fff";
+
+    for (const [i, leader] of this.leaders.entries()) {
+      this.ctx.textAlign = "left";
+      this.ctx.fillText(
+        leader.name,
+        this.cnv.width - (totalWidth + padding) - margin,
+        margin + padding + i * (scale / 1.4 + leading)
+      );
+
+      this.ctx.textAlign = "right";
+      this.ctx.fillText(
+        leader.mass,
+        this.cnv.width - padding - margin,
+        margin + padding + i * (scale / 1.4 + leading)
+      );
+    }
+  }
+}
+
+export { World, Camera, Leaderboard };
 export default { Player, Food, Virus, Mass };

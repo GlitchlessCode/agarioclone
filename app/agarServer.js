@@ -353,6 +353,8 @@ class Player extends Circle {
 
     const angle = Math.atan2(vector.y, vector.x);
 
+    const mult = clamp(this.radius / 4, 0.25, 4);
+
     const newMass = new Mass(
       this.x + Math.cos(angle) * this.radius,
       this.y + Math.sin(angle) * this.radius,
@@ -360,8 +362,8 @@ class Player extends Circle {
       Partition
     );
 
-    newMass.velX = vector.x * (this.radius / 2);
-    newMass.velY = vector.y * (this.radius / 2);
+    newMass.velX = vector.x * mult;
+    newMass.velY = vector.y * mult;
 
     Partition.mutex.unlock();
 
@@ -425,13 +427,26 @@ class Food extends Circle {
 }
 
 class Virus extends Circle {
+  /** @type {number} */
+  velX;
+  /** @type {number} */
+  velY;
   /**
    * @param {number} x
    * @param {number} y
    * @param {SharedBufferPartition} Partition
+   * @param {number} [velX]
+   * @param {number} [velY]
    */
-  constructor(x, y, Partition) {
+  constructor(x, y, Partition, velX, velY) {
     super(x, y, "#22ff22", 100, Partition);
+    if (velX && velY) {
+      this.velX = velX;
+      this.velY = velY;
+    } else {
+      this.velX = 0;
+      this.velY = 0;
+    }
   }
 
   pack() {
@@ -510,12 +525,19 @@ class User extends Entity {
       }
     );
     this.world = world;
-    const name = stringToColour(this.uuid.UUID); // ! TEMPORARY
+    const name = "";
     this.name = { NAME: name, buff: new TextEncoder().encode(name).buffer };
   }
 
   get userIndex() {
     return this._userIndex;
+  }
+
+  /**
+   * @param {string} name
+   */
+  setName(name) {
+    this.name = { NAME: name, buff: new TextEncoder().encode(name).buffer };
   }
 
   kill() {
@@ -608,6 +630,8 @@ class World extends EventEmitter {
   players;
   /** @type {Object.<string, Virus>} */
   viruses;
+  /** @type {Object.<string, Virus>} */
+  movingViruses;
   /** @type {Object.<string, Food>} */
   food;
   /** @type {Object.<string, Mass>} */
@@ -632,6 +656,8 @@ class World extends EventEmitter {
   partitionData;
   /** @type {Object.<string, Circle>} */
   collisionWait;
+  /** @type {{drag:number}} */
+  config;
 
   /**
    * @callback allocate
@@ -672,6 +698,7 @@ class World extends EventEmitter {
     minViruses,
     sharedMemory,
     partitionData,
+    config,
     ...entities
   ) {
     super();
@@ -728,6 +755,7 @@ class World extends EventEmitter {
     this.entities = {};
     this.players = {};
     this.viruses = {};
+    this.movingViruses = {};
     this.food = {};
     this.mass = {};
     this.users = {};
@@ -735,11 +763,12 @@ class World extends EventEmitter {
     this.#width = width;
     this.#height = height;
     this.minFood = minFood;
-    this.minViruses = minViruses;
+    this.minViruses = Math.floor(minViruses * 0.75);
     this.killed = [];
     this.tick = 0;
     this.partitionData = partitionData;
     this.collisionWait = {};
+    this.config = config;
 
     this.mem = {
       player: {
@@ -889,7 +918,42 @@ class World extends EventEmitter {
             break;
           }
           case "virus_pop": {
-            console.log("virusPop");
+            /** @type {Virus} */
+            const originalVirus = circle;
+            /** @type {Mass} */
+            const mass = intersections[index][(target + 1) % 2];
+            const angle = Math.atan2(mass.velY, mass.velX);
+            const vec2 = {
+              x: Math.cos(angle) * 9,
+              y: Math.sin(angle) * 9,
+            };
+
+            originalVirus.mass = 100;
+
+            const length = Object.values(this.viruses).length;
+            if (length + 1 > this.partitionData.virus.count) {
+              const culled = Object.values(this.viruses)[
+                Math.floor(length * Math.random())
+              ];
+              this.mem.virus.deallocate(culled.kill());
+              delete this.viruses[culled.uuid.UUID];
+              delete this.entities[culled.uuid.UUID];
+              this.killed.push(culled.uuid);
+            }
+
+            const newVirus = new Virus(
+              originalVirus.x,
+              originalVirus.y,
+              this.mem.virus.allocate(),
+              vec2.x,
+              vec2.y
+            );
+
+            const id = newVirus.uuid.UUID;
+            this.entities[id] = newVirus;
+            this.viruses[id] = newVirus;
+            this.movingViruses[id] = newVirus;
+
             break;
           }
         }
@@ -979,14 +1043,28 @@ class World extends EventEmitter {
       });
 
     for (const [uuid, mass] of Object.entries(this.mass)) {
-      mass.velX = mass.velX * 0.9 ** DeltaTime;
-      mass.velY = mass.velY * 0.9 ** DeltaTime;
+      mass.velX = mass.velX * this.config.drag ** (DeltaTime * 1.1);
+      mass.velY = mass.velY * this.config.drag ** (DeltaTime * 1.1);
 
       mass.x += DeltaTime * mass.velX;
       mass.y += DeltaTime * mass.velY;
 
       mass.x = clamp(mass.x, 0, this.width);
       mass.y = clamp(mass.y, 0, this.height);
+    }
+
+    for (const [uuid, virus] of Object.entries(this.movingViruses)) {
+      virus.velX = virus.velX * this.config.drag ** (DeltaTime * 1.1);
+      virus.velY = virus.velY * this.config.drag ** (DeltaTime * 1.1);
+
+      virus.x += DeltaTime * virus.velX;
+      virus.y += DeltaTime * virus.velY;
+
+      virus.x = clamp(virus.x, 0, this.width);
+      virus.y = clamp(virus.y, 0, this.height);
+
+      if (Math.hypot(virus.velX, virus.velY) < 0.1)
+        delete this.movingViruses[uuid];
     }
 
     await Workers.assignAll({
@@ -1001,8 +1079,8 @@ class World extends EventEmitter {
       user.scale =
         100 /
         (Math.max(
-          (user.bounds.bottom - user.bounds.top) * 1.1,
-          (user.bounds.right - user.bounds.left) * 1.1
+          (user.bounds.bottom - user.bounds.top) * 1.3,
+          (user.bounds.right - user.bounds.left) * 1.3
         ) +
           75);
 
@@ -1077,6 +1155,46 @@ class World extends EventEmitter {
     Object.values(this.entities)
       .filter((a) => a.different)
       .forEach((circle) => (circle.different = false));
+  }
+
+  /**
+   * @returns {Promise<{name:{NAME: string, buff: ArrayBuffer}, mass:number}[]>}
+   */
+  getLeaders() {
+    return new Promise((resolve, reject) => {
+      Promise.all(this.getUserMasses())
+        .then((userMasses) => {
+          return userMasses.sort((a, b) => b.mass - a.mass);
+        })
+        .then((sorted) => {
+          resolve(sorted.slice(0, 10));
+        });
+    });
+  }
+
+  *getUserMasses() {
+    for (const user of Object.values(this.users)) {
+      yield new Promise((resolve, reject) => {
+        let totalMass = 0;
+        for (const player of Object.values(user.players)) {
+          totalMass += player.mass;
+        }
+        resolve({ name: user.name, mass: Math.round(totalMass) });
+      });
+    }
+  }
+
+  get syncVal() {
+    const result = new ArrayBuffer(4);
+    const view = new DataView(result);
+
+    let total = 0;
+    for (const entity of Object.values(this.entities)) {
+      total += Math.round(entity.x * 10);
+    }
+    view.setUint32(0, total);
+
+    return result;
   }
 
   get width() {

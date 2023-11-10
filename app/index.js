@@ -6,12 +6,16 @@ const path = require("path");
 const {
   World,
   Entities,
+  Circle,
   uuid,
   clamp,
   getType,
   Player,
 } = require("./agarServer");
-const { SHARED_MEMORY_PARTITIONS } = require("./modules/bufferConfig");
+const {
+  SHARED_MEMORY_PARTITIONS,
+  WORLD_SETTINGS,
+} = require("./modules/config.js");
 const { availableParallelism } = require("os");
 const { Worker } = require("worker_threads");
 
@@ -29,7 +33,13 @@ const worldParams = [
   SHARED_MEMORY_PARTITIONS.virus.count,
   SHARED_MEMORY,
   SHARED_MEMORY_PARTITIONS,
+  WORLD_SETTINGS,
 ];
+
+const utf8 = new TextDecoder("utf-8");
+
+/** @type {Object.<string, {changes: ArrayBuffer[], killed:{UUID:string, buff:ArrayBuffer}[]}}>} */
+const syncingClients = {};
 
 let run = true;
 
@@ -39,7 +49,7 @@ class Deferred {
   /** @type {function} */
   reject;
 
-  /**@type {Promise} */
+  /**@type {Promise<void>} */
   promise;
   constructor() {
     this.promise = new Promise((resolve, reject) => {
@@ -173,10 +183,10 @@ class Workers {
   static get length() {
     return this.#workers.length;
   }
-  static killAll() {
-    this.#workers.forEach(({ worker }) => {
-      worker.terminate();
-    });
+  static async killAll() {
+    for (const { worker } of Object.values(this.#workers)) {
+      await worker.terminate();
+    }
   }
 }
 
@@ -188,7 +198,6 @@ const clients = {};
 const world = new World(...worldParams);
 world.update(0, Workers);
 
-let first = true;
 // Websocket Server
 const wsServer = new ws.Server({ noServer: true });
 wsServer.on("connection", async function (ws, req) {
@@ -196,8 +205,6 @@ wsServer.on("connection", async function (ws, req) {
     ws.close();
     return;
   }
-  // TODO: REWRITE STARTUP
-  // * The startup sequence leaves ghost food orbs on the client side
   const UUID = uuid();
   ws.id = UUID;
   ws.queue = [];
@@ -205,6 +212,7 @@ wsServer.on("connection", async function (ws, req) {
   ws.keyTimestamps = [];
   ws.gameStatus = {
     init: false,
+    nameSet: false,
     tickReady: false,
   };
   clients[UUID.UUID] = ws;
@@ -226,12 +234,6 @@ wsServer.on("connection", async function (ws, req) {
   ws.on("message", parseMessage);
   console.log("Connection Established!");
   ws.send(await createMessage(0));
-
-  if (first) {
-    // ! TEMPORARY
-    first = false;
-    Object.values(world.players)[0].mass += 350;
-  }
 });
 
 world.on(
@@ -274,13 +276,17 @@ async function parseMessage(data, isBinary) {
 
   try {
     switch (new Uint8Array(data)[0]) {
-      case 0:
+      case 0: {
         if (this.gameStatus.init == true)
           throw new Error("Game already initialized");
         console.log("init");
         this.gameStatus.init = true;
         await fetchWorld.bind(this)();
         const infoView = new DataView(new ArrayBuffer(4));
+        syncingClients[this.id.UUID] = { changes: [], killed: [] };
+        const user = world.users[this.id.UUID];
+        user.mouse.x = Object.values(user.players)[0].x;
+        user.mouse.y = Object.values(user.players)[0].y;
         this.send(
           await createMessage(
             2,
@@ -289,11 +295,17 @@ async function parseMessage(data, isBinary) {
           )
         );
         break;
+      }
       case 1:
         if (this.queue.length == 0) throw new Error("No queue to process");
         this.send(this.queue.shift());
         break;
       case 7:
+        this.send(
+          await endLoad(syncingClients[this.id.UUID], getUser.bind(this)())
+        );
+
+        delete syncingClients[this.id.UUID];
         this.gameStatus.tickReady = true;
         break;
       case 9:
@@ -324,6 +336,35 @@ async function parseMessage(data, isBinary) {
         }
         handleKey.bind(this, dataView.getInt8(0))();
         break;
+      case 11:
+        syncingClients[this.id.UUID] = { changes: [], killed: [] };
+        this.gameStatus.tickReady = false;
+
+        const entities = Object.values(world.entities);
+        const infoView = new DataView(new ArrayBuffer(4));
+        infoView.setUint32(0, entities.length);
+
+        constructResync(entities).then(async (value) => {
+          this.send(await createMessage(12, infoView.buffer, ...value));
+
+          this.send(
+            await endLoad(syncingClients[this.id.UUID], getUser.bind(this)())
+          );
+          delete syncingClients[this.id.UUID];
+          this.gameStatus.tickReady = true;
+        });
+
+        break;
+      case 15:
+        if (this.gameStatus.nameSet == true)
+          throw new Error("Name already set");
+
+        world.users[this.id.UUID].setName(
+          utf8.decode(dataView.buffer.slice(0, 72))
+        );
+
+        this.gameStatus.nameSet = true;
+        break;
     }
   } catch (error) {
     console.log(error);
@@ -337,6 +378,41 @@ async function parseMessage(data, isBinary) {
  */
 function createMessage(status, ...data) {
   return new Blob([new Uint8Array([status]), ...data]).arrayBuffer();
+}
+
+/**
+ * @param {{changes:ArrayBuffer[], killed:{UUID:string, buff:ArrayBuffer}[]}} changeData
+ * @param {ArrayBuffer} user
+ */
+async function endLoad({ changes, killed }, user) {
+  const infoView = new DataView(new ArrayBuffer(8));
+  infoView.setUint32(0, changes.length);
+  infoView.setUint32(4, killed.length);
+
+  try {
+    return await createMessage(
+      8,
+      infoView,
+      user,
+      ...changes,
+      ...killed.map((uuid) => uuid.buff)
+    );
+  } catch (error) {
+    console.log(error);
+    return await createMessage(255);
+  }
+}
+
+/**
+ * @param {import('./agarServer.js').Circle[]} entities
+ */
+async function constructResync(entities) {
+  /** @type {ArrayBuffer[]} */
+  const result = [];
+  for (const entity of entities) {
+    result.push(await getEntity(entity));
+  }
+  return result;
 }
 
 /**
@@ -359,27 +435,9 @@ async function fetchWorld() {
   this.queue.push(await createMessage(4, getUser.bind(this)()));
 
   for (const [uuid, entity] of Object.entries(world.entities)) {
-    const infoView = new DataView(new ArrayBuffer(24));
-    const colourValue = colour(entity.colour);
+    const entityData = await getEntity(entity);
 
-    let params = [new Uint8Array([getType(entity)]), infoView.buffer];
-    infoView.setFloat64(0, entity.x);
-    infoView.setFloat64(8, entity.y);
-    infoView.setFloat32(16, entity.radius);
-    infoView.setUint8(20, colourValue[0]);
-    infoView.setUint8(21, colourValue[1]);
-    infoView.setUint8(22, colourValue[2]);
-
-    if (entity instanceof Player) {
-      const user = world.users[entity.userID];
-      const nameLength = user.name.buff.byteLength;
-      infoView.setUint8(23, nameLength);
-      params.push(user.name.buff);
-    }
-
-    params.push(entity.uuid.buff);
-
-    this.queue.push(await createMessage(5, ...params));
+    this.queue.push(await createMessage(5, entityData));
   }
 
   this.queue.push(await createMessage(6));
@@ -456,26 +514,41 @@ function handleKey(keypress) {
 }
 
 /**
- * @param {Array} tickData
- * @param {{UUID: string, buff: ArrayBuffer}[]} killed
+ * @param {ArrayBuffer[]} tickData
+ * @param {string[]} killedEntities
  */
-function* sendTick(tickData, killed) {
+function saveData(tickData, killedEntities) {
+  for (const { changes, killed } of Object.values(syncingClients)) {
+    changes.push(...tickData);
+    killed.push(...killedEntities);
+  }
+}
+
+/**
+ * @param {ArrayBuffer[]} tickData
+ * @param {{UUID: string, buff: ArrayBuffer}[]} killed
+ * @param {number} [syncVal]
+ */
+function* sendTick(tickData, killed, syncVal) {
+  const infoView = new DataView(new ArrayBuffer(8));
+  infoView.setUint32(0, tickData.length);
+  infoView.setUint32(4, killed.length);
+  const msgParams = [
+    8,
+    infoView,
+    null,
+    ...tickData,
+    ...killed.map((uuid) => uuid.buff),
+  ];
   for (const ws of wsServer.clients) {
     yield new Promise(async function (resolve, reject) {
       if (ws.gameStatus.tickReady) {
-        const infoView = new DataView(new ArrayBuffer(8));
         try {
-          ws.send(
-            await createMessage(
-              8,
-              (infoView.setUint32(0, tickData.length),
-              infoView.setUint32(4, killed.length),
-              infoView),
-              getUser.bind(ws)(),
-              ...tickData,
-              ...killed.map((uuid) => uuid.buff)
-            )
-          );
+          msgParams[2] = getUser.bind(ws)();
+          if (syncVal) {
+            msgParams.push(syncVal);
+          }
+          ws.send(await createMessage(...msgParams));
         } catch (error) {
           console.log(error);
         }
@@ -485,13 +558,8 @@ function* sendTick(tickData, killed) {
   }
 }
 
-function* createData() {
-  for (const [uuid, entity] of Object.entries(world.entities).filter((a) => {
-    if (a[1] instanceof Player) {
-      return true;
-    }
-    return a[1].different;
-  })) {
+function* createData(filter) {
+  for (const [uuid, entity] of Object.entries(world.entities).filter(filter)) {
     yield new Promise(async function (resolve, reject) {
       resolve(await getEntity(entity));
     });
@@ -527,6 +595,33 @@ async function getEntity(entity) {
 }
 
 /**
+ * @param {{name:{NAME: string, buff: ArrayBuffer}, mass:number}[]} leaders
+ */
+async function sendLeaders(leaders) {
+  const infoView = new DataView(new ArrayBuffer(1));
+  infoView.setUint8(0, leaders.length);
+
+  const params = [14, infoView.buffer];
+
+  for (const leader of leaders) {
+    const leaderView = new DataView(new ArrayBuffer(5));
+    leaderView.setUint32(0, leader.mass);
+    leaderView.setUint8(4, leader.name.buff.byteLength);
+    params.push(leaderView.buffer, leader.name.buff);
+  }
+
+  for (const ws of wsServer.clients) {
+    if (ws.gameStatus.tickReady) {
+      try {
+        ws.send(await createMessage(...params));
+      } catch (error) {
+        console.log(error);
+      }
+    }
+  }
+}
+
+/**
  *
  * @param {string} hex
  * @returns {Array}
@@ -539,39 +634,65 @@ function colour(hex) {
   return result;
 }
 
+const finalWait = new Deferred();
 let max = 0;
 /**
  * @param {0|1|2|3} depth
- * @param {Array} tickData
+ * @param {ArrayBuffer[]} tickData
  */
 async function gameTick(depth, tickData, prevTime) {
   const start = Date.now();
-  if (depth == 0) console.log("tick");
   if (wsServer.clients.size !== 0) {
     // Update World
     await world.update((Date.now() - prevTime) / 25, Workers);
     const end = Date.now();
     if (end - start > max) {
       max = end - start;
-      console.log(max);
+      console.log(`New Peak: ${max}ms`);
     }
     // Make Tick data
-    tickData.push(...(await Promise.all(createData())));
+    tickData.push(
+      ...(await Promise.all(
+        createData((a) => {
+          if (a[1] instanceof Player) {
+            return true;
+          }
+          return a[1].different;
+        })
+      ))
+    );
     if (depth == 0) {
+      // Send Ticks w/ desync check
+      await Promise.all(sendTick(tickData, world.killed, world.syncVal));
+      if (Object.keys(syncingClients).length) saveData(tickData, world.killed);
+      world.killed = [];
+    } else if (depth % 2 == 0) {
       // Send Ticks
       await Promise.all(sendTick(tickData, world.killed));
+      if (Object.keys(syncingClients).length) saveData(tickData, world.killed);
       world.killed = [];
     }
+
+    if (depth % 10 == 0) {
+      world.getLeaders().then((leaders) => {
+        sendLeaders(leaders);
+      });
+    }
+
     world.reset();
   }
-  if (run)
+
+  if (run) {
     setTimeout(
       gameTick,
       50,
-      (depth + 1) % 2,
-      depth == 0 ? [] : tickData,
+      (depth + 1) % 100,
+      depth % 2 == 0 ? [] : tickData,
       start
     );
+  } else {
+    finalWait.resolve();
+  }
 }
 
 function readLineAsync() {
@@ -593,6 +714,7 @@ function readLineAsync() {
   console.log("Press Enter to exit");
   await readLineAsync();
   run = false;
+  await finalWait.promise;
   for (const [uuid, client] of Object.entries(clients)) {
     client.send(await createMessage(255));
     client.close();
@@ -601,7 +723,7 @@ function readLineAsync() {
   }
   wsServer.close();
   server.close();
-  Workers.killAll();
+  await Workers.killAll();
 
   console.log(`Goodbye!`);
 

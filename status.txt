@@ -6,10 +6,14 @@
 5: World Element (+next) [type {0: Player, 1: Virus, 2: Food, 3: Mass} (1), posx(8), posy(8), radius(4), colour(3), nameLength(1), name(0-255), uuid(32)]
 6: World Finished (end)
 7: Ready For Tick []
-8: Tick [itemNum(4), killedNum(4), userPosx(8), userPosy(8), userScale(4) [itemNType(1) {0: Player, 1: Virus, 2: Food, 3: Mass}, itemNPosx (8), itemNPosy(8), itemNRadius(4), itemNColour(3), itemNNameLength(1), itemNName(0-255), itemNUuid(32)]...]
+8: Tick [itemNum(4), killedNum(4), userPosx(8), userPosy(8), userScale(4) [itemNType(1) {0: Player, 1: Virus, 2: Food, 3: Mass}, itemNPosx (8), itemNPosy(8), itemNRadius(4), itemNColour(3), itemNNameLength(1), itemNName(0-255), itemNUuid(32)]..., [killedNUuid(32)]...]
 9: Mouse [mouseX (8), mouseY (8)]
 10: Input Event [type(1)]
+11: Request Resync []
+12: Resync Data [itemNum(4), [itemNType(1) {0: Player, 1: Virus, 2: Food, 3: Mass}, itemNPosx (8), itemNPosy(8), itemNRadius(4), itemNColour(3), itemNNameLength(1), itemNName(0-255), itemNUuid(32)]...]
 
+14: Leaderboard [leaderCount(1), [playerNMass(4), playerNNameLength(1), playerNName(0-255)]...]
+15: User Name [playerName(0-255)]
 16: User Death []
 
 255: Error on Sender []
