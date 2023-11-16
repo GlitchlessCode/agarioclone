@@ -254,10 +254,20 @@ server.on("upgrade", (request, socket, head) => {
   });
 });
 
-app.use(express.static("page"));
-
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "/index.html"));
+  res.sendFile(path.join(__dirname, "./page/index.html"));
+});
+
+app.get("/main.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "./page/main.js"));
+});
+
+app.get("/modules/agar.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "./page/modules/agar.js"));
+});
+
+app.get("/style.css", (req, res) => {
+  res.sendFile(path.join(__dirname, "./page/style.css"));
 });
 
 // * Functions
