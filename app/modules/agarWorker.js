@@ -364,7 +364,7 @@ function updatePlayer(player, user, DeltaTime) {
   player.velX = player.velX * WORLD_SETTINGS.drag ** DeltaTime;
   player.velY = player.velY * WORLD_SETTINGS.drag ** DeltaTime;
 
-  const speed = (0.5 * 0.91 ** player.radius + 0.13) / 2;
+  const speed = 0.5 * 0.91 ** player.radius + 0.13;
 
   const mouse = player.getVector(user.mouse, 1);
 

@@ -100,7 +100,7 @@ function forceSplit(player, world) {
     player.mass = 11250;
   } else {
     const angle = Math.random() * Math.PI * 2;
-    const mult = 0.25 * Math.sqrt(player.radius) * Math.log10(player.radius);
+    const mult = 2.5 * Math.sqrt(player.radius) * Math.log10(player.radius);
     world.addEntities(
       player.split(
         {
@@ -1010,7 +1010,7 @@ class World extends EventEmitter {
 
           const player = eater.circle;
           const mult =
-            0.25 * Math.sqrt(player.radius) * Math.log10(player.radius);
+            2.5 * Math.sqrt(player.radius) * Math.log10(player.radius);
           const newPlayers = [];
           while (
             Object.keys(this.users[player.userID].players).length +

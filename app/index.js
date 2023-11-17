@@ -483,7 +483,7 @@ function handleKey(keypress) {
           player._Partition.mutex.lockWait();
           const { x, y } = player.getVector(user.mouse, 1);
           const mult =
-            0.25 * Math.sqrt(player.radius) * Math.log10(player.radius);
+            2.5 * Math.sqrt(player.radius) * Math.log10(player.radius);
           world.addEntities(
             player.split(
               { x: x * mult, y: y * mult },
@@ -644,6 +644,7 @@ function colour(hex) {
   return result;
 }
 
+const log = [];
 const finalWait = new Deferred();
 let max = 0;
 /**
@@ -656,6 +657,7 @@ async function gameTick(depth, tickData, prevTime) {
     // Update World
     await world.update((Date.now() - prevTime) / 25, Workers);
     const end = Date.now();
+    log.push(end - start);
     if (end - start > max) {
       max = end - start;
       console.log(`New Peak: ${max}ms`);
@@ -683,7 +685,7 @@ async function gameTick(depth, tickData, prevTime) {
       world.killed = [];
     }
 
-    if (depth % 10 == 0) {
+    if (depth % 20 == 0) {
       world.getLeaders().then((leaders) => {
         sendLeaders(leaders);
       });
@@ -695,9 +697,9 @@ async function gameTick(depth, tickData, prevTime) {
   if (run) {
     setTimeout(
       gameTick,
-      50,
-      (depth + 1) % 100,
-      depth % 2 == 0 ? [] : tickData,
+      25,
+      (depth + 1) % 200,
+      depth % 4 == 0 ? [] : tickData,
       start
     );
   } else {
@@ -720,7 +722,7 @@ function readLineAsync() {
 }
 
 (async () => {
-  setTimeout(gameTick, 50, 0, [], Date.now());
+  setTimeout(gameTick, 25, 0, [], Date.now());
   console.log("Press Enter to exit");
   await readLineAsync();
   run = false;
@@ -731,6 +733,20 @@ function readLineAsync() {
     delete clients[uuid];
     world.mem.user.deallocate(world.users[uuid].kill());
   }
+  const fs = require("fs");
+  if (!fs.existsSync(path.join(__dirname, "/logs/"))) {
+    fs.mkdirSync(path.join(__dirname, "/logs/"), { recursive: true });
+  }
+  fs.writeFileSync(
+    path.join(
+      __dirname,
+      "/logs/",
+      new Date().toUTCString().replace(/(?![a-zA-Z0-9 ])./gm, "") + ".txt"
+    ),
+    `Time spent (ms), Tick Number${log.reduce((prev, curr, i) => {
+      return prev + "\n" + curr + "," + i;
+    }, "")}`
+  );
   wsServer.close();
   server.close();
   await Workers.killAll();
